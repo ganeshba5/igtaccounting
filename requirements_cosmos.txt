@@ -1,0 +1,5 @@
+# Additional requirements for Azure Cosmos DB support
+# Install with: pip install -r requirements_cosmos.txt
+
+azure-cosmos>=4.5.1
+
