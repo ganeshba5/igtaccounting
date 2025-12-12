@@ -10,6 +10,7 @@ import csv
 import io
 import os
 import sys
+from functools import wraps
 
 # Check if using Cosmos DB
 USE_COSMOS_DB = os.environ.get('USE_COSMOS_DB') == '1'
@@ -72,27 +73,228 @@ def date_handler(obj):
         return obj.isoformat()
     raise TypeError(f"Type {type(obj)} not serializable")
 
+# Import authentication
+try:
+    from auth import require_auth
+    AUTH_ENABLED = os.environ.get('ENABLE_AUTH', '0') == '1'
+    if not AUTH_ENABLED:
+        # Create no-op decorator if auth is disabled
+        def require_auth(f):
+            return f
+except ImportError:
+    # No-op decorator if auth module not available
+    def require_auth(f):
+        return f
+    AUTH_ENABLED = False
+
+# ========== USER MANAGEMENT UTILITIES ==========
+
+def get_user_by_email(email):
+    """Get user by email address."""
+    if USE_COSMOS_DB:
+        # Query users by email (email is partition key)
+        try:
+            # Try to get directly by id (email) first
+            user = get_item('users', email, partition_key=email)
+            if user and user.get('type') == 'user':
+                return user
+        except:
+            pass
+        
+        # Fallback: query by email
+        users = cosmos_query_items(
+            'users',
+            'SELECT * FROM c WHERE c.type = "user" AND c.email = @email',
+            [{"name": "@email", "value": email}],
+            partition_key=email
+        )
+        return users[0] if users else None
+    else:
+        conn = get_db_connection()
+        user = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+        conn.close()
+        return dict(user) if user else None
+
+def user_has_business_access(user, business_id):
+    """Check if user has access to a specific business."""
+    if not user:
+        return False
+    
+    # Get business IDs user has access to
+    business_ids = user.get('business_ids', [])
+    if isinstance(business_ids, str):
+        # If stored as JSON string, parse it
+        try:
+            business_ids = json.loads(business_ids)
+        except:
+            business_ids = []
+    
+    # Convert to list of integers for comparison
+    business_ids = [int(bid) for bid in business_ids if bid]
+    return int(business_id) in business_ids
+
+def require_user_access(f):
+    """Decorator to ensure user is in the users list and has business access."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Get user from request (set by require_auth decorator)
+        user_info = getattr(request, 'user', None)
+        if not user_info:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Get user email from token
+        user_email = user_info.get('preferred_username') or user_info.get('email') or user_info.get('upn')
+        if not user_email:
+            print(f"DEBUG require_user_access: No email found in token. Available fields: {list(user_info.keys())}")
+            return jsonify({'error': 'User email not found in token'}), 401
+        
+        print(f"DEBUG require_user_access: Checking user access for email: {user_email}")
+        print(f"DEBUG require_user_access: Token fields: preferred_username={user_info.get('preferred_username')}, email={user_info.get('email')}, upn={user_info.get('upn')}")
+        
+        # Check if user exists in users table
+        user = get_user_by_email(user_email)
+        if not user:
+            print(f"DEBUG require_user_access: User '{user_email}' not found in users table")
+            return jsonify({
+                'error': 'Access denied',
+                'message': f'Your email ({user_email}) is not authorized to access this application. Please contact your administrator.',
+                'debug_email': user_email  # Include in response for debugging
+            }), 403
+        
+        print(f"DEBUG require_user_access: User '{user_email}' found, has access to businesses: {user.get('business_ids', [])}")
+        
+        # Check business access if business_id is present
+        business_id = kwargs.get('business_id')
+        if not business_id:
+            # Try to get from args
+            for arg in args:
+                if isinstance(arg, int):
+                    business_id = arg
+                    break
+        
+        if business_id:
+            if not user_has_business_access(user, business_id):
+                return jsonify({
+                    'error': 'Access denied',
+                    'message': f'You do not have access to business {business_id}.'
+                }), 403
+        
+        # Store user info in request for use in route handlers
+        request.current_user = user
+        return f(*args, **kwargs)
+    
+    return decorated_function
+
+# ========== DEBUG ROUTE ==========
+
+@app.route('/api/debug/user-info', methods=['GET'])
+@require_auth
+def debug_user_info():
+    """Debug endpoint to see what user information is in the token."""
+    user_info = getattr(request, 'user', None)
+    if not user_info:
+        return jsonify({'error': 'No user info in token'}), 401
+    
+    # Get user email from token
+    user_email = user_info.get('preferred_username') or user_info.get('email') or user_info.get('upn')
+    
+    # Check if user exists
+    user = None
+    if user_email:
+        user = get_user_by_email(user_email)
+    
+    return jsonify({
+        'token_fields': {
+            'preferred_username': user_info.get('preferred_username'),
+            'email': user_info.get('email'),
+            'upn': user_info.get('upn'),
+            'name': user_info.get('name'),
+            'oid': user_info.get('oid'),
+            'tid': user_info.get('tid'),
+            'all_fields': list(user_info.keys())
+        },
+        'extracted_email': user_email,
+        'user_found_in_db': user is not None,
+        'user_business_ids': user.get('business_ids', []) if user else None,
+        'message': 'Check extracted_email and compare with users in database'
+    }), 200
+
 # ========== BUSINESS ROUTES ==========
 
 @app.route('/api/businesses', methods=['GET'])
+@require_auth
+@require_user_access
 def get_businesses():
-    """Get all businesses."""
+    """Get all businesses the user has access to."""
+    # User should already be validated and stored in request.current_user by require_user_access
+    user = getattr(request, 'current_user', {})
+    
+    if not user:
+        print("ERROR get_businesses: current_user not found in request")
+        return jsonify({'error': 'User not found in request'}), 500
+    
+    print(f"DEBUG get_businesses: Request received, user email: {user.get('email', 'N/A')}")
+    
+    # Get business IDs user has access to
+    business_ids = user.get('business_ids', [])
+    if isinstance(business_ids, str):
+        try:
+            business_ids = json.loads(business_ids)
+        except:
+            business_ids = []
+    business_ids = [int(bid) for bid in business_ids if bid]
+    
+    print(f"DEBUG get_businesses: Business IDs user has access to: {business_ids}")
+    
     if USE_COSMOS_DB:
-        businesses = cosmos_get_businesses()
-        # Transform to match expected format
-        return jsonify([{
-            'id': b['id'],
-            'name': b['name'],
-            'created_at': b.get('created_at'),
-            'updated_at': b.get('updated_at')
-        } for b in businesses])
+        all_businesses = cosmos_get_businesses()
+        print(f"DEBUG get_businesses: Found {len(all_businesses)} total businesses in database")
+        
+        # Filter to only businesses user has access to
+        businesses = []
+        for b in all_businesses:
+            # cosmos_get_businesses() returns: {'id': business_id, 'name': ..., ...}
+            # The 'id' field is actually the business_id (from SELECT c.business_id as id)
+            bid = b.get('business_id') or b.get('id')
+            if bid is None:
+                # Try to extract from id if it's in format "business-1"
+                id_str = str(b.get('id', ''))
+                if id_str.startswith('business-'):
+                    try:
+                        bid = int(id_str.replace('business-', ''))
+                    except:
+                        continue
+                else:
+                    continue
+            
+            bid_int = int(bid) if bid else None
+            print(f"DEBUG get_businesses: Checking business bid={bid_int}, business_ids list={business_ids}")
+            if bid_int and bid_int in business_ids:
+                businesses.append({
+                    'id': bid_int,
+                    'name': b.get('name'),
+                    'created_at': b.get('created_at'),
+                    'updated_at': b.get('updated_at')
+                })
+        
+        print(f"DEBUG get_businesses: Returning {len(businesses)} businesses for user: {[b['id'] for b in businesses]}")
+        return jsonify(businesses)
     else:
         conn = get_db_connection()
-        businesses = conn.execute('SELECT * FROM businesses ORDER BY name').fetchall()
+        if business_ids:
+            # Get only businesses user has access to
+            placeholders = ','.join(['?'] * len(business_ids))
+            query = f'SELECT id, name, created_at, updated_at FROM businesses WHERE id IN ({placeholders}) ORDER BY name'
+            businesses = conn.execute(query, business_ids).fetchall()
+        else:
+            # User has no business access
+            businesses = []
         conn.close()
         return jsonify([dict(b) for b in businesses])
 
 @app.route('/api/businesses', methods=['POST'])
+@require_auth
+@require_user_access
 def create_business():
     """Create a new business."""
     data = request.get_json()
@@ -104,7 +306,7 @@ def create_business():
     if USE_COSMOS_DB:
         # Get next business_id
         businesses = cosmos_get_businesses()
-        next_id = max([b['id'] for b in businesses], default=0) + 1
+        next_id = max([b.get('business_id', 0) for b in businesses if b.get('business_id')], default=0) + 1
         
         business_doc = {
             'id': f'business-{next_id}',
@@ -129,11 +331,13 @@ def create_business():
         business_id = cursor.lastrowid
         conn.commit()
         
-        business = conn.execute('SELECT * FROM businesses WHERE id = ?', (business_id,)).fetchone()
+        business = conn.execute('SELECT id, name, created_at, updated_at FROM businesses WHERE id = ?', (business_id,)).fetchone()
         conn.close()
         return jsonify(dict(business)), 201
 
 @app.route('/api/businesses/<int:business_id>', methods=['GET'])
+@require_auth
+@require_user_access
 def get_business(business_id):
     """Get a specific business."""
     if USE_COSMOS_DB:
@@ -154,7 +358,7 @@ def get_business(business_id):
             return jsonify({'error': f'Error retrieving business: {str(e)}'}), 500
     else:
         conn = get_db_connection()
-        business = conn.execute('SELECT * FROM businesses WHERE id = ?', (business_id,)).fetchone()
+        business = conn.execute('SELECT id, name, created_at, updated_at FROM businesses WHERE id = ?', (business_id,)).fetchone()
         conn.close()
         
         if business is None:
@@ -163,6 +367,8 @@ def get_business(business_id):
         return jsonify(dict(business))
 
 @app.route('/api/businesses/<int:business_id>', methods=['PUT'])
+@require_auth
+@require_user_access
 def update_business(business_id):
     """Update a business."""
     data = request.get_json()
@@ -214,11 +420,13 @@ def update_business(business_id):
             return jsonify({'error': 'Business not found'}), 404
         
         conn.commit()
-        business = conn.execute('SELECT * FROM businesses WHERE id = ?', (business_id,)).fetchone()
+        business = conn.execute('SELECT id, name, created_at, updated_at FROM businesses WHERE id = ?', (business_id,)).fetchone()
         conn.close()
         return jsonify(dict(business))
 
 @app.route('/api/businesses/<int:business_id>', methods=['DELETE'])
+@require_auth
+@require_user_access
 def delete_business(business_id):
     """Delete a business."""
     if USE_COSMOS_DB:
@@ -246,6 +454,8 @@ def delete_business(business_id):
 # ========== CHART OF ACCOUNTS ROUTES ==========
 
 @app.route('/api/businesses/<int:business_id>/chart-of-accounts', methods=['GET'])
+@require_auth
+@require_user_access
 def get_chart_of_accounts(business_id):
     """Get chart of accounts for a business."""
     if USE_COSMOS_DB:
@@ -289,6 +499,8 @@ def get_chart_of_accounts(business_id):
         return jsonify([dict(a) for a in accounts])
 
 @app.route('/api/businesses/<int:business_id>/chart-of-accounts', methods=['POST'])
+@require_auth
+@require_user_access
 def create_chart_of_account(business_id):
     """Create a new account in the chart of accounts."""
     data = request.get_json()
@@ -446,6 +658,8 @@ def create_chart_of_account(business_id):
             return jsonify({'error': 'Account code already exists for this business'}), 400
 
 @app.route('/api/businesses/<int:business_id>/chart-of-accounts/<int:account_id>', methods=['PUT'])
+@require_auth
+@require_user_access
 def update_chart_of_account(business_id, account_id):
     """Update an existing account in the chart of accounts."""
     data = request.get_json()
@@ -711,6 +925,8 @@ def get_account_types():
 # ========== BANK ACCOUNTS ROUTES ==========
 
 @app.route('/api/businesses/<int:business_id>/bank-accounts', methods=['GET'])
+@require_auth
+@require_user_access
 def get_bank_accounts(business_id):
     """Get all bank accounts for a business."""
     if USE_COSMOS_DB:
@@ -737,6 +953,8 @@ def get_bank_accounts(business_id):
         return jsonify([dict(a) for a in accounts])
 
 @app.route('/api/businesses/<int:business_id>/bank-accounts', methods=['POST'])
+@require_auth
+@require_user_access
 def create_bank_account(business_id):
     """Create a new bank account."""
     data = request.get_json()
@@ -815,6 +1033,8 @@ def create_bank_account(business_id):
 # ========== CREDIT CARD ACCOUNTS ROUTES ==========
 
 @app.route('/api/businesses/<int:business_id>/credit-card-accounts', methods=['GET'])
+@require_auth
+@require_user_access
 def get_credit_card_accounts(business_id):
     """Get all credit card accounts for a business."""
     if USE_COSMOS_DB:
@@ -841,6 +1061,8 @@ def get_credit_card_accounts(business_id):
         return jsonify([dict(a) for a in accounts])
 
 @app.route('/api/businesses/<int:business_id>/credit-card-accounts', methods=['POST'])
+@require_auth
+@require_user_access
 def create_credit_card_account(business_id):
     """Create a new credit card account."""
     data = request.get_json()
@@ -915,6 +1137,8 @@ def create_credit_card_account(business_id):
 # ========== LOAN ACCOUNTS ROUTES ==========
 
 @app.route('/api/businesses/<int:business_id>/loan-accounts', methods=['GET'])
+@require_auth
+@require_user_access
 def get_loan_accounts(business_id):
     """Get all loan accounts for a business."""
     if USE_COSMOS_DB:
@@ -941,6 +1165,8 @@ def get_loan_accounts(business_id):
         return jsonify([dict(a) for a in accounts])
 
 @app.route('/api/businesses/<int:business_id>/loan-accounts', methods=['POST'])
+@require_auth
+@require_user_access
 def create_loan_account(business_id):
     """Create a new loan account."""
     data = request.get_json()
@@ -1018,6 +1244,8 @@ def create_loan_account(business_id):
 # ========== TRANSACTION ROUTES ==========
 
 @app.route('/api/businesses/<int:business_id>/transactions', methods=['GET'])
+@require_auth
+@require_user_access
 def get_transactions(business_id):
     """Get all transactions for a business."""
     start_date = request.args.get('start_date')
@@ -1154,6 +1382,8 @@ def get_transactions(business_id):
         return jsonify(result)
 
 @app.route('/api/businesses/<int:business_id>/transactions', methods=['POST'])
+@require_auth
+@require_user_access
 def create_transaction(business_id):
     """Create a new transaction with double-entry bookkeeping."""
     data = request.get_json()
@@ -1313,6 +1543,8 @@ def create_transaction(business_id):
             return jsonify({'error': str(e)}), 400
 
 @app.route('/api/businesses/<int:business_id>/transactions/<int:transaction_id>', methods=['PUT'])
+@require_auth
+@require_user_access
 def update_transaction(business_id, transaction_id):
     """Update an existing transaction."""
     data = request.get_json()
@@ -1489,6 +1721,8 @@ def update_transaction(business_id, transaction_id):
             return jsonify({'error': str(e)}), 400
 
 @app.route('/api/businesses/<int:business_id>/transactions/bulk-update', methods=['PUT'])
+@require_auth
+@require_user_access
 def bulk_update_transactions(business_id):
     """Bulk update transaction lines - assign chart of account to existing transaction lines."""
     data = request.get_json()
@@ -2139,6 +2373,8 @@ def delete_transaction_type_mapping(mapping_id):
 # ========== CSV IMPORT ROUTES ==========
 
 @app.route('/api/businesses/<int:business_id>/transactions/import-csv', methods=['POST'])
+@require_auth
+@require_user_access
 def import_transactions_csv(business_id):
     """Import transactions from CSV file."""
     try:
@@ -3352,36 +3588,34 @@ def get_profit_loss(business_id):
             'net_income': net_income
         })
     
-    # SQLite implementation
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
-    year = request.args.get('year')
-    
-    if year:
-        start_date = f'{year}-01-01'
-        end_date = f'{year}-12-31'
-    
-    if not start_date or not end_date:
-        return jsonify({'error': 'start_date and end_date (or year) are required'}), 400
-    
-    # Debug logging
-    print(f"P&L Query - business_id: {business_id}, start_date: {start_date}, end_date: {end_date}")
-    print(f"Using transaction_date field (not created_at)")
-    
+    # SQLite implementation - process all businesses user has access to
     conn = get_db_connection()
     
-    # Get all revenue and expense accounts with their balances and account type info
-    accounts = conn.execute('''
-        SELECT coa.id, coa.account_code, coa.account_name, 
+    # Get all revenue and expense accounts across all user's businesses
+    if not business_ids:
+        conn.close()
+        return jsonify({
+            'start_date': start_date,
+            'end_date': end_date,
+            'revenue': [],
+            'expenses': [],
+            'net_income': 0,
+            'total_revenue': 0,
+            'total_expenses': 0
+        })
+    
+    placeholders = ','.join(['?'] * len(business_ids))
+    accounts = conn.execute(f'''
+        SELECT coa.id, coa.account_code, coa.account_name, coa.business_id,
                at.category, at.normal_balance, at.id as account_type_id,
                at.code as account_type_code, at.name as account_type_name
         FROM chart_of_accounts coa
         JOIN account_types at ON coa.account_type_id = at.id
-        WHERE coa.business_id = ? 
+        WHERE coa.business_id IN ({placeholders})
         AND at.category IN ('REVENUE', 'EXPENSE')
         AND coa.is_active = 1
         ORDER BY at.category, at.name, coa.account_code
-    ''', (business_id,)).fetchall()
+    ''', business_ids).fetchall()
     
     # Group accounts by account type
     revenue_by_type = {}
@@ -3394,6 +3628,7 @@ def get_profit_loss(business_id):
         account_dict = dict(account)
         
         # Calculate total debits and credits for this account in the date range
+        account_business_id = account['business_id']
         result = conn.execute('''
             SELECT 
                 COALESCE(SUM(tl.debit_amount), 0) as total_debits,
@@ -3406,7 +3641,7 @@ def get_profit_loss(business_id):
             AND t.business_id = ?
             AND DATE(t.transaction_date) >= DATE(?)
             AND DATE(t.transaction_date) <= DATE(?)
-        ''', (account_id, business_id, start_date, end_date)).fetchone()
+        ''', (account_id, account_business_id, start_date, end_date)).fetchone()
         
         total_debits = float(result['total_debits'] or 0)
         total_credits = float(result['total_credits'] or 0)
@@ -3477,32 +3712,124 @@ def get_profit_loss(business_id):
     })
 
 @app.route('/api/reports/combined-profit-loss', methods=['GET'])
+@require_auth
+@require_user_access
 def get_combined_profit_loss():
-    """Get combined Profit & Loss report for all businesses with hierarchical grouping."""
+    """Get combined Profit & Loss report for all businesses the user has access to."""
+    print("=" * 60)
+    print("DEBUG combined P&L: Function called")
+    user = getattr(request, 'current_user', {})
+    print(f"DEBUG combined P&L: User: {user.get('email', 'unknown')}, business_ids: {user.get('business_ids', [])}")
+    
+    # Get business IDs user has access to
+    business_ids = user.get('business_ids', [])
+    if isinstance(business_ids, str):
+        try:
+            business_ids = json.loads(business_ids)
+        except:
+            business_ids = []
+    business_ids = [int(bid) for bid in business_ids if bid]
+    print(f"DEBUG combined P&L: Parsed business_ids: {business_ids}")
+    
+    if not business_ids:
+        print("DEBUG combined P&L: No business_ids, returning empty report")
+        # User has no business access
+        return jsonify({
+            'revenue': [],
+            'expenses': [],
+            'net_income': 0,
+            'total_revenue': 0,
+            'total_expenses': 0
+        })
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     year = request.args.get('year')
+    print(f"DEBUG combined P&L: Date params - start_date={start_date}, end_date={end_date}, year={year}")
     
     if year:
         start_date = f'{year}-01-01'
         end_date = f'{year}-12-31'
     
     if not start_date or not end_date:
+        print("DEBUG combined P&L: Missing date params, returning 400")
         return jsonify({'error': 'start_date and end_date (or year) are required'}), 400
     
     if USE_COSMOS_DB:
         try:
-            # Get all businesses
-            businesses = cosmos_get_businesses()
+            print("DEBUG combined P&L: Using Cosmos DB path")
+            # Get only businesses user has access to
+            # Use query_items directly to get full business objects with business_id field
+            all_businesses = query_items(
+                'businesses',
+                'SELECT * FROM c WHERE c.type = "business"',
+                [],
+                partition_key=None
+            )
+            print(f"DEBUG combined P&L: Found {len(all_businesses)} total businesses in DB")
+            print(f"DEBUG combined P&L: User business_ids to match: {business_ids}")
+            if all_businesses:
+                print(f"DEBUG combined P&L: Sample business structure - keys: {list(all_businesses[0].keys())}, business_id: {all_businesses[0].get('business_id')}, id: {all_businesses[0].get('id')}")
+            businesses = []
+            for b in all_businesses:
+                # Get business_id from the document (should be an integer)
+                bid = b.get('business_id')
+                if bid is None:
+                    # Fallback: try to extract from id field if it's like "business-1"
+                    bid_str = b.get('id', '')
+                    if isinstance(bid_str, str) and bid_str.startswith('business-'):
+                        try:
+                            bid = int(bid_str.replace('business-', ''))
+                        except:
+                            print(f"DEBUG combined P&L: Could not parse business id from: {bid_str}")
+                            continue
+                    else:
+                        print(f"DEBUG combined P&L: Business missing business_id and id not parseable: {b.get('id')}")
+                        continue
+                
+                try:
+                    bid = int(bid)
+                except (ValueError, TypeError):
+                    print(f"DEBUG combined P&L: Could not convert business id to int: {bid} (type: {type(bid)})")
+                    continue
+                
+                print(f"DEBUG combined P&L: Checking business id {bid} (type: {type(bid)}) against {business_ids} (types: {[type(x) for x in business_ids]})")
+                if bid in business_ids:
+                    businesses.append(b)
+                    print(f"DEBUG combined P&L: ✓ Added business {bid}: {b.get('name')}")
+                else:
+                    print(f"DEBUG combined P&L: ✗ Business {bid} not in user's business_ids {business_ids}")
             
-            # Get all revenue/expense accounts across all businesses
+            print(f"DEBUG combined P&L: Filtered to {len(businesses)} businesses user has access to")
+            if not businesses:
+                print("DEBUG combined P&L: No businesses found, returning empty report")
+                return jsonify({
+                    'revenue': [],
+                    'expenses': [],
+                    'net_income': 0,
+                    'total_revenue': 0,
+                    'total_expenses': 0
+                })
+            
+            # Get all revenue/expense accounts across user's businesses
             all_accounts = []
             all_transactions = []
             
             for business in businesses:
-                business_id = business.get('id')
-                if not business_id:
+                # cosmos_get_businesses() returns business_id as 'id' field
+                bid = business.get('business_id') or business.get('id')
+                if bid is None:
                     continue
+                try:
+                    business_id = int(bid)
+                except (ValueError, TypeError):
+                    # If id is a string like "business-1", extract the number
+                    if isinstance(bid, str) and bid.startswith('business-'):
+                        try:
+                            business_id = int(bid.replace('business-', ''))
+                        except:
+                            continue
+                    else:
+                        continue
                     
                 # Get accounts for this business
                 accounts = cosmos_get_chart_of_accounts(business_id)
@@ -3521,40 +3848,90 @@ def get_combined_profit_loss():
                 
                 # Get transactions in date range
                 transactions = cosmos_get_transactions(business_id, start_date=start_date, end_date=end_date)
+                print(f"DEBUG combined P&L: Business {business_id}: Found {len(transactions)} transactions in date range {start_date} to {end_date}")
                 all_transactions.extend(transactions)
             
             # Calculate balances
             account_balances = {}
+            print(f"DEBUG combined P&L: Processing {len(all_transactions)} transactions")
             for txn in all_transactions:
-                business_id = txn.get('business_id')
+                txn_business_id = txn.get('business_id')
+                if not txn_business_id:
+                    print(f"DEBUG combined P&L: Transaction missing business_id: {txn.get('id')}")
+                    continue
+                txn_business_id = int(txn_business_id)
+                
                 for line in txn.get('lines', []):
                     account_id = line.get('chart_of_account_id')
-                    if account_id:
-                        key = (business_id, account_id)
-                        if key not in account_balances:
-                            account_balances[key] = {
-                                'debit_total': 0.0,
-                                'credit_total': 0.0
-                            }
-                        account_balances[key]['debit_total'] += float(line.get('debit_amount', 0) or 0)
-                        account_balances[key]['credit_total'] += float(line.get('credit_amount', 0) or 0)
+                    if not account_id:
+                        continue
+                    
+                    # Handle account_id that might be in format "account-{business_id}-{account_id}"
+                    if isinstance(account_id, str) and account_id.startswith('account-'):
+                        parts = account_id.split('-')
+                        if len(parts) >= 3:
+                            try:
+                                account_id = int(parts[2])
+                            except:
+                                print(f"DEBUG combined P&L: Could not parse account_id: {account_id}")
+                                continue
+                        else:
+                            continue
+                    
+                    account_id = int(account_id)
+                    key = (txn_business_id, account_id)
+                    
+                    if key not in account_balances:
+                        account_balances[key] = {
+                            'debit_total': 0.0,
+                            'credit_total': 0.0
+                        }
+                    account_balances[key]['debit_total'] += float(line.get('debit_amount', 0) or 0)
+                    account_balances[key]['credit_total'] += float(line.get('credit_amount', 0) or 0)
+            
+            print(f"DEBUG combined P&L: Calculated balances for {len(account_balances)} account/business combinations")
+            if account_balances:
+                print(f"DEBUG combined P&L: Sample balance keys: {list(account_balances.keys())[:5]}")
             
             # Build account map with balances and business info
             account_map = {}
             balance_map = {}
-            business_map = {b.get('id'): b.get('name') for b in businesses}
+            # Build business_map using business_id
+            business_map = {}
+            for b in businesses:
+                bid = b.get('business_id')
+                if not bid:
+                    # cosmos_get_businesses() returns {'id': business_id, ...}
+                    bid = b.get('id')
+                if not bid:
+                    continue
+                # Handle both string and int formats
+                if isinstance(bid, str) and bid.startswith('business-'):
+                    try:
+                        bid = int(bid.replace('business-', ''))
+                    except:
+                        continue
+                business_map[int(bid)] = b.get('name')
+            
+            print(f"DEBUG combined P&L: Processing {len(all_accounts)} accounts")
+            print(f"DEBUG combined P&L: Account balances keys: {list(account_balances.keys())[:5] if account_balances else 'None'}")
+            
+            accounts_with_balances = 0
+            accounts_without_balances = 0
             
             for acc in all_accounts:
                 # get_chart_of_accounts returns 'id' (aliased from account_id)
                 account_id = acc.get('id')
                 if not account_id:
                     continue
+                account_id = int(account_id)
                     
-                business_id = acc.get('business_id')
-                if not business_id:
+                acc_business_id = acc.get('business_id')
+                if not acc_business_id:
                     continue
+                acc_business_id = int(acc_business_id)
                     
-                business_name = business_map.get(business_id, f'Business {business_id}')
+                business_name = business_map.get(acc_business_id, f'Business {acc_business_id}')
                 
                 # Get account type info - it's a nested object
                 account_type = acc.get('account_type', {})
@@ -3565,16 +3942,23 @@ def get_combined_profit_loss():
                 if not category or category not in ('REVENUE', 'EXPENSE'):
                     continue
                 
-                key = (business_id, account_id)
+                # Ensure both are integers for the key matching
+                key = (acc_business_id, account_id)
                 balance = 0.0
                 if key in account_balances:
+                    accounts_with_balances += 1
                     debit_total = account_balances[key]['debit_total']
                     credit_total = account_balances[key]['credit_total']
+                    print(f"DEBUG combined P&L: ✓ Found balance for account {account_id} ({acc.get('account_code')}) in business {acc_business_id}: debits={debit_total}, credits={credit_total}, category={category}")
                     
                     if category == 'REVENUE':
                         balance = credit_total - debit_total
                     else:  # EXPENSE
                         balance = debit_total - credit_total
+                else:
+                    accounts_without_balances += 1
+                    if accounts_without_balances <= 5:  # Only log first 5 to avoid spam
+                        print(f"DEBUG combined P&L: ✗ No balance found for key ({acc_business_id}, {account_id}) - account: {acc.get('account_code')} {acc.get('account_name')}")
                 
                 # Include accounts with balance or for hierarchy
                 acc_dict = {
@@ -3582,7 +3966,7 @@ def get_combined_profit_loss():
                     'account_code': acc.get('account_code'),
                     'account_name': acc.get('account_name'),
                     'parent_account_id': acc.get('parent_account_id'),
-                    'business_id': business_id,
+                    'business_id': acc_business_id,
                     'business_name': business_name,
                     'category': category,
                     'account_type_id': account_type.get('id') or account_type.get('account_type_id'),
@@ -3592,6 +3976,8 @@ def get_combined_profit_loss():
                 }
                 account_map[account_id] = acc_dict
                 balance_map[account_id] = balance
+            
+            print(f"DEBUG combined P&L: Summary - {accounts_with_balances} accounts with balances, {accounts_without_balances} accounts without balances")
             
             # Helper function to get account path
             def get_account_path(account_id, visited=None):
@@ -3759,7 +4145,7 @@ def get_combined_profit_loss():
             total_expense = sum(node['total'] for node in expense_structure.values())
             net_income = total_revenue - total_expense
             
-            return jsonify({
+            result = {
                 'revenue': revenue_output,
                 'expenses': expense_output,  # Note: plural 'expenses' to match SQLite version
                 'total_revenue': total_revenue,
@@ -3767,7 +4153,10 @@ def get_combined_profit_loss():
                 'net_income': net_income,
                 'start_date': start_date,
                 'end_date': end_date
-            })
+            }
+            print(f"DEBUG combined P&L: Returning result - revenue items: {len(revenue_output)}, expense items: {len(expense_output)}, total_revenue: {total_revenue}, total_expenses: {total_expense}, net_income: {net_income}")
+            print("=" * 60)
+            return jsonify(result)
         except Exception as e:
             print(f"Error getting combined profit loss: {e}")
             import traceback
@@ -4048,6 +4437,8 @@ def get_combined_profit_loss():
     })
 
 @app.route('/api/businesses/<int:business_id>/reports/balance-sheet', methods=['GET'])
+@require_auth
+@require_user_access
 def get_balance_sheet(business_id):
     """Get Balance Sheet report as of a specific date."""
     if USE_COSMOS_DB:

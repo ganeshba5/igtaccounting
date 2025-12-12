@@ -548,6 +548,7 @@ def init_database():
     
     containers_config = {
         'businesses': PartitionKey(path='/id'),
+        'users': PartitionKey(path='/email'),
         'account_types': PartitionKey(path='/id'),
         'chart_of_accounts': PartitionKey(path='/business_id'),
         'bank_accounts': PartitionKey(path='/business_id'),

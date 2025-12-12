@@ -16,9 +16,16 @@ function Businesses() {
   const loadBusinesses = async () => {
     try {
       const response = await api.getBusinesses()
-      setBusinesses(response.data)
+      setBusinesses(response.data || [])
     } catch (error) {
       console.error('Error loading businesses:', error)
+      // Show user-friendly error message
+      if (error.response?.status === 401) {
+        alert('Authentication failed. Please sign in again.')
+      } else {
+        alert('Error loading businesses: ' + (error.response?.data?.error || error.message))
+      }
+      setBusinesses([]) // Set empty array on error
     } finally {
       setLoading(false)
     }
@@ -43,7 +50,7 @@ function Businesses() {
   }
 
   const handleEdit = (business) => {
-    setFormData({ name: business.name })
+    setFormData({ name: business.name, passphrase: '' })
     setEditingBusinessId(business.id)
     setShowModal(true)
   }
