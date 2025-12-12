@@ -8,8 +8,22 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:5001',
+        target: 'http://localhost:5001', // Development proxy - production uses VITE_API_BASE_URL
         changeOrigin: true
+      }
+    }
+  },
+  build: {
+    outDir: 'dist',
+    assetsDir: 'assets',
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'azure-vendor': ['@azure/msal-browser'],
+          'axios-vendor': ['axios']
+        }
       }
     }
   }

@@ -40,7 +40,23 @@ else:
 SERVE_STATIC = os.environ.get('FLASK_ENV') == 'production' or os.environ.get('BUILD_FRONTEND') == '1'
 
 app = Flask(__name__)
-CORS(app)
+
+# Configure CORS based on environment
+if os.environ.get('FLASK_ENV') == 'production':
+    # In production, allow specific origins
+    allowed_origins = os.environ.get('CORS_ORIGINS', '').split(',')
+    if allowed_origins and allowed_origins[0]:
+        CORS(app, origins=allowed_origins)
+    else:
+        # Fallback: allow all Azure Static Web Apps domains
+        CORS(app, origins=[
+            'https://*.azurestaticapps.net',
+            'http://localhost:3000',  # For local testing
+            'http://localhost:5001'   # For local testing
+        ])
+else:
+    # In development, allow all origins
+    CORS(app)
 
 # Path to frontend build directory
 FRONTEND_BUILD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend', 'dist')

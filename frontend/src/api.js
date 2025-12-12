@@ -1,6 +1,9 @@
 import axios from 'axios'
 
-const API_BASE_URL = '/api'
+// Support environment-based API URL
+// In development: uses relative '/api' (proxied by Vite)
+// In production: uses environment variable or falls back to relative '/api'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 // Create axios instance with interceptor for auth tokens
 // Note: baseURL is set to '/api', so API calls should NOT include '/api' prefix
