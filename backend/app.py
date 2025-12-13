@@ -44,9 +44,22 @@ app = Flask(__name__)
 # Configure CORS based on environment
 if os.environ.get('FLASK_ENV') == 'production':
     # In production, allow specific origins
-    allowed_origins = os.environ.get('CORS_ORIGINS', '').split(',')
-    if allowed_origins and allowed_origins[0]:
-        CORS(app, origins=allowed_origins)
+    cors_origins_env = os.environ.get('CORS_ORIGINS', '')
+    if cors_origins_env:
+        # Split and strip whitespace from each origin
+        allowed_origins = [origin.strip() for origin in cors_origins_env.split(',') if origin.strip()]
+        if allowed_origins:
+            print(f"✅ CORS configured with origins from environment: {allowed_origins}")
+            CORS(app, origins=allowed_origins)
+        else:
+            print("⚠️ CORS_ORIGINS is set but empty after parsing, using fallback")
+            # Fall through to fallback
+    else:
+        print("⚠️ CORS_ORIGINS not set, using fallback")
+        # Fall through to fallback
+    
+    # Fallback if CORS_ORIGINS not set or empty
+    if not cors_origins_env or not [origin.strip() for origin in cors_origins_env.split(',') if origin.strip()]:
     else:
         # Fallback: allow Azure Static Web Apps and custom domain
         CORS(app, origins=[
