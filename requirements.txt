@@ -1,6 +1,21 @@
+# Production requirements for Azure App Service
+# This file includes all dependencies needed for the Flask backend
+
+# Core Flask dependencies
 Flask==3.0.0
 flask-cors==4.0.0
+
+# Azure Cosmos DB
+azure-cosmos==4.14.3
+
+# Authentication
 PyJWT==2.8.0
-cryptography==41.0.7
-requests==2.31.0
+cryptography>=41.0.0
+requests>=2.31.0
+
+# Production WSGI server
+gunicorn==21.2.0
+
+# Additional utilities
+python-dateutil>=2.8.2
 
