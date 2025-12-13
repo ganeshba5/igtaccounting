@@ -38,6 +38,5 @@ jobs:
         with:
           app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
           package: .
-          type: zip
-          clean: true
+          resource-group-name: IgtAcct
 
