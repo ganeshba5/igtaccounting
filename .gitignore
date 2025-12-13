@@ -48,6 +48,14 @@ Thumbs.db
 # Logs
 *.log
 logs/
+LogFiles/
+*.zip
+deployments/
+app-logs.zip
+latest-logs.zip
+cors-logs.zip
+recent-logs.zip
+startup-logs.zip
 
 # Azure
 .azure/
