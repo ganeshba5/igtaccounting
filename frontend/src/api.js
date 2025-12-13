@@ -2,8 +2,25 @@ import axios from 'axios'
 
 // Support environment-based API URL
 // In development: uses relative '/api' (proxied by Vite)
-// In production: uses environment variable or falls back to relative '/api'
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+// In production: uses environment variable or detects Static Web Apps and uses backend URL
+const getApiBaseUrl = () => {
+  // If environment variable is set (build time), use it
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL
+  }
+  
+  // Detect production Static Web Apps environment
+  const hostname = window.location.hostname
+  if (hostname.includes('azurestaticapps.net')) {
+    // Production: point to backend API
+    return 'https://igtacct-api-azaghzb4chhagvc3.eastus-01.azurewebsites.net/api'
+  }
+  
+  // Development: use relative path (proxied by Vite)
+  return '/api'
+}
+
+const API_BASE_URL = getApiBaseUrl()
 
 // Create axios instance with interceptor for auth tokens
 // Note: baseURL is set to '/api', so API calls should NOT include '/api' prefix
