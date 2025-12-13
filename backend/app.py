@@ -58,9 +58,6 @@ if os.environ.get('FLASK_ENV') == 'production':
         print("⚠️ CORS_ORIGINS not set, using fallback")
         # Fall through to fallback
     
-    # Fallback if CORS_ORIGINS not set or empty
-    if not cors_origins_env or not [origin.strip() for origin in cors_origins_env.split(',') if origin.strip()]:
-    else:
         # Fallback: allow Azure Static Web Apps and custom domain
         CORS(app, origins=[
             'https://thankful-rock-0bea0c80f.3.azurestaticapps.net',
