@@ -59,7 +59,7 @@ else:
     CORS(app)
 
 # Path to frontend build directory
-FRONTEND_BUILD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend', 'dist')
+FRONTEND_BUILD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend', 'build')
 
 # Initialize database on startup
 if USE_COSMOS_DB:
