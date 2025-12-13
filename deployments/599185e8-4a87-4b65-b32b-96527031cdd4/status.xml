@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<deployment>
+  <id>599185e8-4a87-4b65-b32b-96527031cdd4</id>
+  <author>N/A</author>
+  <deployer>GITHUB_ZIP_DEPLOY</deployer>
+  <authorEmail>N/A</authorEmail>
+  <message>{"type":"deployment","sha":"38d75e7f15e7558b4a36212f1a47e08d4352cd47","repoName":"ganeshba5/igtaccounting","actor":"ganeshba5","slotName":"production","commitMessage":"Fix: Remove invalid parameters from webapps-deploy action"}</message>
+  <progress></progress>
+  <status>Success</status>
+  <statusText></statusText>
+  <lastSuccessEndTime>2025-12-13T07:03:38.0502551Z</lastSuccessEndTime>
+  <receivedTime>2025-12-13T07:02:38.2073946Z</receivedTime>
+  <startTime>2025-12-13T07:02:39.640581Z</startTime>
+  <endTime>2025-12-13T07:03:38.0502551Z</endTime>
+  <complete>True</complete>
+  <is_temp>False</is_temp>
+  <is_readonly>True</is_readonly>
+  <buildSummary />
+</deployment>

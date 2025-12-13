@@ -1,0 +1,17 @@
+<step title="Incoming Request" date="2025-12-12T22:38:24.453" instance="2e9614" url="/api/zipdeploy?isAsync=true&amp;deployer=GITHUB_ZIP_DEPLOY&amp;message=%7B%22type%22%3A%22deployment%22%2C%22sha%22%3A%22e23c84eb23403274f4d34a5b6ad2a6487dbea52c%22%2C%22repoName%22%3A%22ganeshba5%2Figtaccounting%22%2C%22actor%22%3A%22ganeshba5%22%2C%22slotName%22%3A%22production%22%2C%22commitMessage%22%3A%22Merge%20branch%20%27main%27%20of%20github.com%3Aganeshba5%2Figtaccounting%5CnAzure%20deployment%20settings%20in%20githhub%20actions%22%7D" method="POST" type="request" pid="769,1,26" Host="igtacct-api-azaghzb4chhagvc3.scm.eastus-01.azurewebsites.net" User-Agent="GITHUBACTIONS_DeployWebAppToAzure_896b495d69d18a47268ec3cbd86451cf31d17392f2b6ce9a44cf0cad388b0727" Authorization="Bea..." Content-Type="application/octet-stream" Cookie="ARRAffinity=2e9614b903860387ad41d2d4735570ca0c8b29649a02cb187ad6afea560d5745;Path=/;HttpOnly;Secure;Domain=igtacct-api-azaghzb4chhagvc3.scm.eastus-01.azurewebsites.net; ARRAffinitySameSite=2e9614b903860387ad41d2d4735570ca0c8b29649a02cb187ad6afea560d5745;Path=/;HttpOnly;SameSite=None;Secure;Domain=igtacct-api-azaghzb4chhagvc3.scm.eastus-01.azurewebsites.net" Transfer-Encoding="chunked" X-ARR-LOG-ID="8ab059ab-6e6e-4eae-b3aa-87f6fa1cc61c" CLIENT-IP="52.176.19.193:44992" X-SITE-DEPLOYMENT-ID="igtacct-api" WAS-DEFAULT-HOSTNAME="igtacct-api-azaghzb4chhagvc3.scm.eastus-01.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/zipdeploy?isAsync=true&amp;deployer=GITHUB_ZIP_DEPLOY&amp;message=%7B%22type%22%3A%22deployment%22%2C%22sha%22%3A%22e23c84eb23403274f4d34a5b6ad2a6487dbea52c%22%2C%22repoName%22%3A%22ganeshba5%2Figtaccounting%22%2C%22actor%22%3A%22ganeshba5%22%2C%22slotName%22%3A%22production%22%2C%22commitMessage%22%3A%22Merge%20branch%20%27main%27%20of%20github.com%3Aganeshba5%2Figtaccounting%5CnAzure%20deployment%20settings%20in%20githhub%20actions%22%7D" X-Client-IP="52.176.19.193" X-Client-Port="44992" >
+  <step title="ZipPushDeploy" date="2025-12-12T22:38:24.515" >
+    <step title="ZipDeploy. Extract zip." date="2025-12-12T22:38:24.533" /><!-- duration: 18ms -->
+    <step title="None repository commit" date="2025-12-12T22:38:24.594" >
+      <step title="Commit id: db79d71d-97a4-4226-b741-e03e1392f93d" date="2025-12-12T22:38:24.602" Message="N/A" AuthorName="N/A" AuthorEmail="N/A" /><!-- duration: 8ms -->
+    </step><!-- duration: 22ms -->
+    <step title="Starting PushDeployAsync" date="2025-12-12T22:38:24.626" /><!-- duration: 7ms -->
+    <step title="Writing artifact to /tmp/zipdeploy/5431fd4e-7cf2-4e06-9d95-2ee6a20a65b0.zip" date="2025-12-12T22:38:24.678" >
+      <step title="Writing multipart request body to /tmp/zipdeploy/5431fd4e-7cf2-4e06-9d95-2ee6a20a65b0.zip" date="2025-12-12T22:38:24.704" /><!-- duration: 16ms -->
+    </step><!-- duration: 74ms -->
+    <step title="Start deployment in the background" date="2025-12-12T22:38:24.822" >
+      <step title="Acquiring Deployment Lock" date="2025-12-12T22:38:24.846" /><!-- duration: 15ms -->
+      <step title="Acquired Deployment Lock" date="2025-12-12T22:38:24.972" /><!-- duration: 8ms -->
+    </step><!-- duration: 344ms -->
+  </step><!-- duration: 668ms -->
+  <step title="Outgoing response" date="2025-12-12T22:38:25.195" type="response" statusCode="202" statusText="Accepted" /><!-- duration: 25ms -->
+</step><!-- duration: 788ms -->

@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<deployment>
+  <id>ba0a0f47-1660-436d-89b5-d0f57c5e2589</id>
+  <author>N/A</author>
+  <deployer>GITHUB_ZIP_DEPLOY</deployer>
+  <authorEmail>N/A</authorEmail>
+  <message>{"type":"deployment","sha":"bd25c362052b74ea32e3796592aeb5c19be08d6b","repoName":"ganeshba5/igtaccounting","actor":"ganeshba5","slotName":"production","commitMessage":"Fix: Correct CORS fallback logic to always use fallback when env var parsing fails"}</message>
+  <progress></progress>
+  <status>Success</status>
+  <statusText></statusText>
+  <lastSuccessEndTime>2025-12-13T07:10:43.4075161Z</lastSuccessEndTime>
+  <receivedTime>2025-12-13T07:09:03.9234284Z</receivedTime>
+  <startTime>2025-12-13T07:09:05.4763451Z</startTime>
+  <endTime>2025-12-13T07:10:43.4075161Z</endTime>
+  <complete>True</complete>
+  <is_temp>False</is_temp>
+  <is_readonly>True</is_readonly>
+  <buildSummary />
+</deployment>

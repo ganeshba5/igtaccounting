@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<deployment>
+  <id>e66912a3-38fa-4076-bf2d-d469ff24b366</id>
+  <author>N/A</author>
+  <deployer>GITHUB_ZIP_DEPLOY</deployer>
+  <authorEmail>N/A</authorEmail>
+  <message>{"type":"deployment","sha":"ca0ac2c34a16d57ac0ac935147407693372aa161","repoName":"ganeshba5/igtaccounting","actor":"ganeshba5","slotName":"production","commitMessage":"Fix: Change build output from dist to build for Azure Static Web Apps"}</message>
+  <progress></progress>
+  <status>Success</status>
+  <statusText></statusText>
+  <lastSuccessEndTime>2025-12-13T01:10:11.1878408Z</lastSuccessEndTime>
+  <receivedTime>2025-12-13T01:10:03.8508221Z</receivedTime>
+  <startTime>2025-12-13T01:10:05.2945403Z</startTime>
+  <endTime>2025-12-13T01:10:11.1878408Z</endTime>
+  <complete>True</complete>
+  <is_temp>False</is_temp>
+  <is_readonly>True</is_readonly>
+  <buildSummary />
+</deployment>

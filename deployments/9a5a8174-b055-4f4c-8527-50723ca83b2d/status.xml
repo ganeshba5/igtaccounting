@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<deployment>
+  <id>9a5a8174-b055-4f4c-8527-50723ca83b2d</id>
+  <author>N/A</author>
+  <deployer>GITHUB_ZIP_DEPLOY</deployer>
+  <authorEmail>N/A</authorEmail>
+  <message>{"type":"deployment","sha":"90a1541290d7a81521a8329c341240bc231ed2eb","repoName":"ganeshba5/igtaccounting","actor":"ganeshba5","slotName":"production","commitMessage":"Fix: Improve CORS origins parsing with proper whitespace handling"}</message>
+  <progress></progress>
+  <status>Success</status>
+  <statusText></statusText>
+  <lastSuccessEndTime>2025-12-13T06:59:35.3589975Z</lastSuccessEndTime>
+  <receivedTime>2025-12-13T06:58:28.0150495Z</receivedTime>
+  <startTime>2025-12-13T06:58:29.5385317Z</startTime>
+  <endTime>2025-12-13T06:59:35.3589975Z</endTime>
+  <complete>True</complete>
+  <is_temp>False</is_temp>
+  <is_readonly>True</is_readonly>
+  <buildSummary />
+</deployment>

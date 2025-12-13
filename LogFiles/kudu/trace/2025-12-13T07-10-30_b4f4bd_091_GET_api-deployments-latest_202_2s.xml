@@ -1,0 +1,9 @@
+<step title="Incoming Request" date="2025-12-13T07:10:30.475" instance="b4f4bd" url="/api/deployments/latest?deployer=GITHUB_ZIP_DEPLOY&amp;time=2025-12-13_07-08-58Z" method="GET" type="request" pid="770,1,35" Host="igtacct-api-azaghzb4chhagvc3.scm.eastus-01.azurewebsites.net" User-Agent="GITHUBACTIONS_DeployWebAppToAzure_896b495d69d18a47268ec3cbd86451cf31d17392f2b6ce9a44cf0cad388b0727" Authorization="Bea..." Content-Type="application/json; charset=utf-8" Cookie="ARRAffinity=b4f4bdf7a0f4891ddf10f445d59660450c27445fa2cf77c0a1a8154f4ceae2b1;Path=/;HttpOnly;Secure;Domain=igtacct-api-azaghzb4chhagvc3.scm.eastus-01.azurewebsites.net; ARRAffinitySameSite=b4f4bdf7a0f4891ddf10f445d59660450c27445fa2cf77c0a1a8154f4ceae2b1;Path=/;HttpOnly;SameSite=None;Secure;Domain=igtacct-api-azaghzb4chhagvc3.scm.eastus-01.azurewebsites.net" Content-Length="0" X-ARR-LOG-ID="455f3267-53be-4732-814b-843631ef5d83" CLIENT-IP="64.236.140.210:13330" X-SITE-DEPLOYMENT-ID="igtacct-api" WAS-DEFAULT-HOSTNAME="igtacct-api-azaghzb4chhagvc3.scm.eastus-01.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/deployments/latest?deployer=GITHUB_ZIP_DEPLOY&amp;time=2025-12-13_07-08-58Z" X-Client-IP="64.236.140.210" X-Client-Port="13330" >
+  <step title="Cleanup Xml Logs" date="2025-12-13T07:10:30.503" /><!-- duration: 43ms -->
+  <step title="DeploymentService.GetResult" date="2025-12-13T07:10:30.614" >
+    <step title="DeploymentService.GetLatestDeployment" date="2025-12-13T07:10:30.641" >
+      <step title="DeploymentManager.GetResults" date="2025-12-13T07:10:30.661" /><!-- duration: 1200ms -->
+    </step><!-- duration: 1249ms -->
+  </step><!-- duration: 1296ms -->
+  <step title="Outgoing response" date="2025-12-13T07:10:31.931" type="response" statusCode="202" statusText="Accepted" /><!-- duration: 21ms -->
+</step><!-- duration: 1506ms -->

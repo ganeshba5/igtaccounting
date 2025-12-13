@@ -1,0 +1,16 @@
+<step title="Incoming Request" date="2025-12-13T06:58:34.539" instance="b4f4bd" url="/api/zipdeploy?isAsync=true&amp;deployer=GITHUB_ZIP_DEPLOY&amp;message=%7B%22type%22%3A%22deployment%22%2C%22sha%22%3A%22137877853b80dbf445198f1e5847305e077805f9%22%2C%22repoName%22%3A%22ganeshba5%2Figtaccounting%22%2C%22actor%22%3A%22ganeshba5%22%2C%22slotName%22%3A%22production%22%2C%22commitMessage%22%3A%22Fix%3A%20Correct%20CORS%20fallback%20syntax%20error%22%7D" method="POST" type="request" pid="770,1,38" Host="igtacct-api-azaghzb4chhagvc3.scm.eastus-01.azurewebsites.net" User-Agent="GITHUBACTIONS_DeployWebAppToAzure_896b495d69d18a47268ec3cbd86451cf31d17392f2b6ce9a44cf0cad388b0727" Authorization="Bea..." Content-Type="application/octet-stream" Cookie="ARRAffinity=b4f4bdf7a0f4891ddf10f445d59660450c27445fa2cf77c0a1a8154f4ceae2b1;Path=/;HttpOnly;Secure;Domain=igtacct-api-azaghzb4chhagvc3.scm.eastus-01.azurewebsites.net; ARRAffinitySameSite=b4f4bdf7a0f4891ddf10f445d59660450c27445fa2cf77c0a1a8154f4ceae2b1;Path=/;HttpOnly;SameSite=None;Secure;Domain=igtacct-api-azaghzb4chhagvc3.scm.eastus-01.azurewebsites.net" Transfer-Encoding="chunked" X-ARR-LOG-ID="f57dcb9a-9e38-4453-9c31-b0129fc25da0" CLIENT-IP="135.232.177.160:37888" X-SITE-DEPLOYMENT-ID="igtacct-api" WAS-DEFAULT-HOSTNAME="igtacct-api-azaghzb4chhagvc3.scm.eastus-01.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/zipdeploy?isAsync=true&amp;deployer=GITHUB_ZIP_DEPLOY&amp;message=%7B%22type%22%3A%22deployment%22%2C%22sha%22%3A%22137877853b80dbf445198f1e5847305e077805f9%22%2C%22repoName%22%3A%22ganeshba5%2Figtaccounting%22%2C%22actor%22%3A%22ganeshba5%22%2C%22slotName%22%3A%22production%22%2C%22commitMessage%22%3A%22Fix%3A%20Correct%20CORS%20fallback%20syntax%20error%22%7D" X-Client-IP="135.232.177.160" X-Client-Port="37888" >
+  <step title="Cleanup Xml Logs" date="2025-12-13T06:58:34.557" /><!-- duration: 43ms -->
+  <step title="ZipPushDeploy" date="2025-12-13T06:58:34.660" >
+    <step title="ZipDeploy. Extract zip. Remote build." date="2025-12-13T06:58:34.699" /><!-- duration: 12ms -->
+    <step title="Starting PushDeployAsync" date="2025-12-13T06:58:34.737" /><!-- duration: 12ms -->
+    <step title="Writing artifact to /tmp/zipdeploy/7f52e8a0-d241-4ef4-b8b1-c5d33791a569.zip" date="2025-12-13T06:58:34.807" >
+      <step title="Writing multipart request body to /tmp/zipdeploy/7f52e8a0-d241-4ef4-b8b1-c5d33791a569.zip" date="2025-12-13T06:58:34.821" /><!-- duration: 49ms -->
+    </step><!-- duration: 892ms -->
+    <step title="Start deployment in the background" date="2025-12-13T06:58:35.759" >
+      <step title="Acquiring Deployment Lock" date="2025-12-13T06:58:35.819" /><!-- duration: 21ms -->
+      <step title="Cannot Acquire Deployment Lock already held" date="2025-12-13T06:58:35.938" /><!-- duration: 31ms -->
+    </step><!-- duration: 419ms -->
+    <step title="There is a deployment currently in progress. Please try again when it completes." date="2025-12-13T06:58:36.247" /><!-- duration: 32ms -->
+  </step><!-- duration: 1669ms -->
+  <step title="Outgoing response" date="2025-12-13T06:58:36.358" type="response" statusCode="409" statusText="Conflict" /><!-- duration: 20ms -->
+</step><!-- duration: 1861ms -->

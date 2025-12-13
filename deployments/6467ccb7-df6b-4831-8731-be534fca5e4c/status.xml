@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<deployment>
+  <id>6467ccb7-df6b-4831-8731-be534fca5e4c</id>
+  <author>N/A</author>
+  <deployer>GITHUB_ZIP_DEPLOY</deployer>
+  <authorEmail>N/A</authorEmail>
+  <message>{"type":"deployment","sha":"0ee7ca72d6bed5909b693c00bed287a7b6e7ff24","repoName":"ganeshba5/igtaccounting","actor":"ganeshba5","slotName":"production","commitMessage":"Fix: Add root requirements.txt for Azure App Service dependency installation"}</message>
+  <progress></progress>
+  <status>Success</status>
+  <statusText></statusText>
+  <lastSuccessEndTime>2025-12-13T04:51:27.6269812Z</lastSuccessEndTime>
+  <receivedTime>2025-12-13T04:49:41.1419841Z</receivedTime>
+  <startTime>2025-12-13T04:49:42.5718748Z</startTime>
+  <endTime>2025-12-13T04:51:27.6269812Z</endTime>
+  <complete>True</complete>
+  <is_temp>False</is_temp>
+  <is_readonly>True</is_readonly>
+  <buildSummary />
+</deployment>
