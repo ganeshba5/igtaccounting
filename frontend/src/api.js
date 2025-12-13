@@ -11,7 +11,7 @@ const getApiBaseUrl = () => {
   
   // Detect production Static Web Apps environment
   const hostname = window.location.hostname
-  if (hostname.includes('azurestaticapps.net')) {
+  if (hostname.includes('azurestaticapps.net') || hostname === 'acc.infogloballink.com') {
     // Production: point to backend API
     return 'https://igtacct-api-azaghzb4chhagvc3.eastus-01.azurewebsites.net/api'
   }
