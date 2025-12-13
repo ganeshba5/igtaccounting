@@ -2,19 +2,15 @@ import React, { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 
 function Login() {
-  const { login, loginRedirect } = useAuth()
+  const { login } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const handleLogin = async (usePopup = true) => {
+  const handleLogin = async () => {
     setLoading(true)
     setError(null)
     try {
-      if (usePopup) {
-        await login()
-      } else {
-        loginRedirect()
-      }
+      await login()
     } catch (err) {
       setError(err.message || 'Login failed. Please try again.')
       setLoading(false)
@@ -42,30 +38,19 @@ function Login() {
             </div>
           )}
           
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-            <button
-              className="btn btn-primary"
-              onClick={() => handleLogin(true)}
-              disabled={loading}
-              style={{ width: '100%', padding: '12px' }}
-            >
-              {loading ? 'Signing in...' : 'Sign in with Microsoft (Popup)'}
-            </button>
-            
-            <button
-              className="btn btn-secondary"
-              onClick={() => handleLogin(false)}
-              disabled={loading}
-              style={{ width: '100%', padding: '12px' }}
-            >
-              Sign in with Microsoft (Redirect)
-            </button>
-          </div>
+          <button
+            className="btn btn-primary"
+            onClick={handleLogin}
+            disabled={loading}
+            style={{ width: '100%', padding: '12px' }}
+          >
+            {loading ? 'Signing in...' : 'Sign in with Microsoft'}
+          </button>
           
           <div style={{ marginTop: '30px', padding: '20px', background: '#f8f9fa', borderRadius: '4px' }}>
             <p style={{ fontSize: '12px', color: '#666', margin: 0 }}>
               <strong>Note:</strong> This application uses Microsoft Single Sign-On (SSO) for secure authentication.
-              You'll be redirected to Microsoft's login page to sign in with your work or personal Microsoft account.
+              A popup window will open for you to sign in with your work or personal Microsoft account.
             </p>
           </div>
         </div>
