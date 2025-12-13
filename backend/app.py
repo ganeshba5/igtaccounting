@@ -48,9 +48,10 @@ if os.environ.get('FLASK_ENV') == 'production':
     if allowed_origins and allowed_origins[0]:
         CORS(app, origins=allowed_origins)
     else:
-        # Fallback: allow all Azure Static Web Apps domains
+        # Fallback: allow Azure Static Web Apps and custom domain
         CORS(app, origins=[
-            'https://*.azurestaticapps.net',
+            'https://thankful-rock-0bea0c80f.3.azurestaticapps.net',
+            'https://acc.infogloballink.com',
             'http://localhost:3000',  # For local testing
             'http://localhost:5001'   # For local testing
         ])
