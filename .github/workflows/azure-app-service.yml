@@ -10,6 +10,7 @@ on:
       - 'azure-app-service-requirements.txt'
       - '.github/workflows/azure-app-service.yml'
   workflow_dispatch:
+  # Also allow manual trigger via workflow_dispatch button in GitHub Actions UI
 
 jobs:
   build_and_deploy:
