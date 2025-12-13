@@ -67,7 +67,13 @@ if os.environ.get('FLASK_ENV') == 'production':
         ]
     
     print(f"✅ CORS configured with origins: {allowed_origins}")
-    CORS(app, origins=allowed_origins)
+    # Configure CORS with explicit settings for flask-cors 4.0.0
+    CORS(app, 
+         origins=allowed_origins,
+         supports_credentials=True,
+         allow_headers=["Content-Type", "Authorization"],
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+    print(f"✅ CORS initialized with {len(allowed_origins)} allowed origins")
 else:
     # In development, allow all origins
     CORS(app)
