@@ -168,6 +168,19 @@ function Transactions() {
     setShowModal(true)
   }
 
+  const handleDelete = async (transaction) => {
+    if (!window.confirm(`Are you sure you want to delete this transaction?\n\nDate: ${new Date(transaction.transaction_date).toLocaleDateString()}\nDescription: ${transaction.description || 'N/A'}\n\nThis action cannot be undone.`)) {
+      return
+    }
+
+    try {
+      await api.deleteTransaction(businessId, transaction.id)
+      loadData()
+    } catch (error) {
+      alert('Error deleting transaction: ' + (error.response?.data?.error || error.message))
+    }
+  }
+
   const handleCloseModal = () => {
     setShowModal(false)
     setEditingTransactionId(null)
@@ -377,13 +390,22 @@ function Transactions() {
                     </td>
                     <td>${parseFloat(txn.amount || 0).toFixed(2)}</td>
                     <td>
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => handleEdit(txn)}
-                        style={{ padding: '4px 8px', fontSize: '12px' }}
-                      >
-                        Edit
-                      </button>
+                      <div style={{ display: 'flex', gap: '5px' }}>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => handleEdit(txn)}
+                          style={{ padding: '4px 8px', fontSize: '12px' }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="btn btn-danger"
+                          onClick={() => handleDelete(txn)}
+                          style={{ padding: '4px 8px', fontSize: '12px' }}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )

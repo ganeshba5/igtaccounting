@@ -1756,6 +1756,69 @@ def update_transaction(business_id, transaction_id):
             conn.close()
             return jsonify({'error': str(e)}), 400
 
+@app.route('/api/businesses/<int:business_id>/transactions/<int:transaction_id>', methods=['DELETE'])
+@require_auth
+@require_user_access
+def delete_transaction(business_id, transaction_id):
+    """Delete a transaction."""
+    if USE_COSMOS_DB:
+        try:
+            from database_cosmos import get_transaction, delete_item
+            
+            # Get existing transaction to verify it exists and belongs to business
+            transaction = get_transaction(transaction_id, business_id)
+            if not transaction:
+                return jsonify({'error': 'Transaction not found'}), 404
+            
+            # Get the document ID for deletion
+            transaction_doc_id = transaction.get('id')
+            if not transaction_doc_id:
+                # Fallback: construct ID from transaction_id
+                transaction_doc_id = f"transaction-{transaction_id}"
+            
+            # Delete the transaction (lines are embedded, so they'll be deleted too)
+            delete_item('transactions', transaction_doc_id, partition_key=str(business_id))
+            
+            return jsonify({'message': 'Transaction deleted successfully'}), 200
+        except Exception as e:
+            print(f"Error deleting transaction: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': f'Error deleting transaction: {str(e)}'}), 500
+    else:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Verify transaction exists and belongs to business
+            transaction = conn.execute(
+                'SELECT * FROM transactions WHERE id = ? AND business_id = ?',
+                (transaction_id, business_id)
+            ).fetchone()
+            
+            if not transaction:
+                conn.close()
+                return jsonify({'error': 'Transaction not found'}), 404
+            
+            # Delete transaction lines first (CASCADE should handle this, but being explicit)
+            cursor.execute('DELETE FROM transaction_lines WHERE transaction_id = ?', (transaction_id,))
+            
+            # Delete transaction
+            cursor.execute('DELETE FROM transactions WHERE id = ? AND business_id = ?', (transaction_id, business_id))
+            
+            if cursor.rowcount == 0:
+                conn.rollback()
+                conn.close()
+                return jsonify({'error': 'Transaction not found'}), 404
+            
+            conn.commit()
+            conn.close()
+            return jsonify({'message': 'Transaction deleted successfully'}), 200
+        except Exception as e:
+            conn.rollback()
+            conn.close()
+            return jsonify({'error': f'Error deleting transaction: {str(e)}'}), 500
+
 @app.route('/api/businesses/<int:business_id>/transactions/bulk-update', methods=['PUT'])
 @require_auth
 @require_user_access

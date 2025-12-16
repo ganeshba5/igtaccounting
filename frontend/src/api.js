@@ -113,6 +113,7 @@ const api = {
   getTransactions: (businessId, params = {}) => axiosInstance.get(`/businesses/${businessId}/transactions`, { params }),
   createTransaction: (businessId, data) => axiosInstance.post(`/businesses/${businessId}/transactions`, data),
   updateTransaction: (businessId, transactionId, data) => axiosInstance.put(`/businesses/${businessId}/transactions/${transactionId}`, data),
+  deleteTransaction: (businessId, transactionId) => axiosInstance.delete(`/businesses/${businessId}/transactions/${transactionId}`),
   bulkUpdateTransactions: (businessId, data) => axiosInstance.put(`/businesses/${businessId}/transactions/bulk-update`, data),
   
   // Reports
