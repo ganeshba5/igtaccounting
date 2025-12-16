@@ -149,6 +149,26 @@ function Reports() {
     }
   }
 
+  const loadBalanceSheetAccountTransactions = async (account, asOfDate) => {
+    setLoadingTransactions(true)
+    setDrillDownAccount(account)
+    try {
+      // Load all transactions up to the as_of_date for this account
+      const params = {
+        account_id: account.id,
+        end_date: asOfDate
+      }
+      const response = await api.getTransactions(businessId, params)
+      setDrillDownTransactions(response.data)
+    } catch (error) {
+      console.error('Error loading account transactions:', error)
+      alert('Error loading transactions: ' + (error.response?.data?.error || error.message))
+      setDrillDownAccount(null)
+    } finally {
+      setLoadingTransactions(false)
+    }
+  }
+
   const closeDrillDown = () => {
     setDrillDownAccount(null)
     setDrillDownTransactions([])
@@ -406,7 +426,12 @@ function Reports() {
                   
                   <div style={{ marginBottom: '15px' }}>
                     <p><strong>Account:</strong> {drillDownAccount.account_code} - {drillDownAccount.account_name}</p>
-                    <p><strong>Period:</strong> {profitLoss && `${new Date(profitLoss.start_date).toLocaleDateString()} - ${new Date(profitLoss.end_date).toLocaleDateString()}`}</p>
+                    {profitLoss && (
+                      <p><strong>Period:</strong> {`${new Date(profitLoss.start_date).toLocaleDateString()} - ${new Date(profitLoss.end_date).toLocaleDateString()}`}</p>
+                    )}
+                    {balanceSheet && (
+                      <p><strong>As of:</strong> {new Date(balanceSheet.as_of_date).toLocaleDateString()}</p>
+                    )}
                     <p><strong>Total:</strong> {formatCurrency(drillDownAccount.balance)}</p>
                   </div>
 
@@ -490,12 +515,30 @@ function Reports() {
                     </tr>
                   </thead>
                   <tbody>
-                    {balanceSheet.assets.map((item, index) => (
-                      <tr key={index}>
-                        <td>{item.account_code || '-'} - {item.account_name}</td>
-                        <td style={{ textAlign: 'right' }}>{formatCurrency(item.balance)}</td>
-                      </tr>
-                    ))}
+                    {balanceSheet.assets.map((item, index) => {
+                      const hasTransactions = item.id && Math.abs(item.balance) > 0.01
+                      return (
+                        <tr key={index}>
+                          <td>
+                            {hasTransactions ? (
+                              <a
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  loadBalanceSheetAccountTransactions(item, balanceSheet.as_of_date)
+                                }}
+                                style={{ color: '#007bff', textDecoration: 'underline', cursor: 'pointer' }}
+                              >
+                                {item.account_code || '-'} - {item.account_name}
+                              </a>
+                            ) : (
+                              `${item.account_code || '-'} - ${item.account_name}`
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'right' }}>{formatCurrency(item.balance)}</td>
+                        </tr>
+                      )
+                    })}
                     <tr style={{ fontWeight: 'bold', borderTop: '2px solid #333' }}>
                       <td>Total Assets</td>
                       <td style={{ textAlign: 'right' }}>{formatCurrency(balanceSheet.total_assets)}</td>
@@ -511,12 +554,30 @@ function Reports() {
                     </tr>
                   </thead>
                   <tbody>
-                    {balanceSheet.liabilities.map((item, index) => (
-                      <tr key={index}>
-                        <td>{item.account_code || '-'} - {item.account_name}</td>
-                        <td style={{ textAlign: 'right' }}>{formatCurrency(item.balance)}</td>
-                      </tr>
-                    ))}
+                    {balanceSheet.liabilities.map((item, index) => {
+                      const hasTransactions = item.id && Math.abs(item.balance) > 0.01
+                      return (
+                        <tr key={index}>
+                          <td>
+                            {hasTransactions ? (
+                              <a
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  loadBalanceSheetAccountTransactions(item, balanceSheet.as_of_date)
+                                }}
+                                style={{ color: '#007bff', textDecoration: 'underline', cursor: 'pointer' }}
+                              >
+                                {item.account_code || '-'} - {item.account_name}
+                              </a>
+                            ) : (
+                              `${item.account_code || '-'} - ${item.account_name}`
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'right' }}>{formatCurrency(item.balance)}</td>
+                        </tr>
+                      )
+                    })}
                     <tr style={{ fontWeight: 'bold', borderTop: '2px solid #333' }}>
                       <td>Total Liabilities</td>
                       <td style={{ textAlign: 'right' }}>{formatCurrency(balanceSheet.total_liabilities)}</td>
@@ -532,12 +593,30 @@ function Reports() {
                     </tr>
                   </thead>
                   <tbody>
-                    {balanceSheet.equity.map((item, index) => (
-                      <tr key={index}>
-                        <td>{item.account_code || '-'} - {item.account_name}</td>
-                        <td style={{ textAlign: 'right' }}>{formatCurrency(item.balance)}</td>
-                      </tr>
-                    ))}
+                    {balanceSheet.equity.map((item, index) => {
+                      const hasTransactions = item.id && Math.abs(item.balance) > 0.01
+                      return (
+                        <tr key={index}>
+                          <td>
+                            {hasTransactions ? (
+                              <a
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  loadBalanceSheetAccountTransactions(item, balanceSheet.as_of_date)
+                                }}
+                                style={{ color: '#007bff', textDecoration: 'underline', cursor: 'pointer' }}
+                              >
+                                {item.account_code || '-'} - {item.account_name}
+                              </a>
+                            ) : (
+                              `${item.account_code || '-'} - ${item.account_name}`
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'right' }}>{formatCurrency(item.balance)}</td>
+                        </tr>
+                      )
+                    })}
                     <tr style={{ fontWeight: 'bold', borderTop: '2px solid #333' }}>
                       <td>Total Equity</td>
                       <td style={{ textAlign: 'right' }}>{formatCurrency(balanceSheet.total_equity)}</td>

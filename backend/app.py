@@ -4763,12 +4763,16 @@ def get_balance_sheet(business_id):
                         # Balance = opening balance + (debits - credits)
                         balance = opening_balance + (debit_total - credit_total)
                 
-                assets.append({
+                bank_account_dict = {
                     'account_code': bank_account_code,
                     'account_name': bank.get('account_name'),
                     'balance': balance,
                     'is_bank_account': True
-                })
+                }
+                # Add account ID if there's an associated chart of account
+                if bank_chart_account:
+                    bank_account_dict['id'] = int(bank_chart_account.get('id'))
+                assets.append(bank_account_dict)
             
             # Get credit card accounts and add to liabilities
             credit_card_accounts = query_items(
