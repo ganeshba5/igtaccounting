@@ -1763,27 +1763,30 @@ def delete_transaction(business_id, transaction_id):
     """Delete a transaction."""
     if USE_COSMOS_DB:
         try:
-            from database_cosmos import get_transaction, delete_item
-            
             # Get existing transaction to verify it exists and belongs to business
             transaction = get_transaction(transaction_id, business_id)
             if not transaction:
                 return jsonify({'error': 'Transaction not found'}), 404
             
             # Get the document ID for deletion
+            # The document ID format is "transaction-{transaction_id}"
             transaction_doc_id = transaction.get('id')
             if not transaction_doc_id:
                 # Fallback: construct ID from transaction_id
                 transaction_doc_id = f"transaction-{transaction_id}"
             
+            print(f"DEBUG delete_transaction: Deleting transaction document ID: {transaction_doc_id}, partition_key: {business_id}")
+            
             # Delete the transaction (lines are embedded, so they'll be deleted too)
+            # For transactions container, partition key is /business_id
             delete_item('transactions', transaction_doc_id, partition_key=str(business_id))
             
             return jsonify({'message': 'Transaction deleted successfully'}), 200
         except Exception as e:
             print(f"Error deleting transaction: {e}")
             import traceback
-            traceback.print_exc()
+            error_trace = traceback.format_exc()
+            print(f"Full traceback:\n{error_trace}")
             return jsonify({'error': f'Error deleting transaction: {str(e)}'}), 500
     else:
         conn = get_db_connection()
