@@ -1819,14 +1819,33 @@ def delete_transaction(business_id, transaction_id):
                 actual_doc_id = f"transaction-{transaction_id}"
                 print(f"DEBUG delete_transaction: Warning - transaction document missing 'id' field, constructing: {actual_doc_id}")
             
+            # For transactions container, partition key path is /business_id
+            # So the partition key value should be the business_id (as string)
             partition_key_value = str(business_id)
+            
+            # Ensure business_id from transaction matches (handle both int and string)
+            txn_business_id = transaction.get('business_id')
+            if txn_business_id:
+                txn_business_id = int(txn_business_id)
+                if txn_business_id != business_id:
+                    print(f"DEBUG delete_transaction: Business ID mismatch - transaction has {txn_business_id}, requested {business_id}")
+                    return jsonify({'error': 'Transaction does not belong to this business'}), 403
+                # Use the business_id from the transaction document to be safe
+                partition_key_value = str(txn_business_id)
+            
             print(f"DEBUG delete_transaction: Transaction document actual 'id' field: {actual_doc_id}")
-            print(f"DEBUG delete_transaction: Using document ID: {actual_doc_id}, partition_key: {partition_key_value}")
-            print(f"DEBUG delete_transaction: Transaction document fields: id={transaction.get('id')}, transaction_id={transaction.get('transaction_id')}, business_id={transaction.get('business_id')}")
+            print(f"DEBUG delete_transaction: Using document ID: {actual_doc_id}, partition_key: {partition_key_value} (type: {type(partition_key_value).__name__})")
+            print(f"DEBUG delete_transaction: Transaction document fields: id={transaction.get('id')}, transaction_id={transaction.get('transaction_id')}, business_id={transaction.get('business_id')} (type: {type(transaction.get('business_id')).__name__})")
             
             # Delete the transaction (lines are embedded, so they'll be deleted too)
             # For transactions container, partition key is /business_id
-            delete_item('transactions', actual_doc_id, partition_key=partition_key_value)
+            try:
+                delete_item('transactions', actual_doc_id, partition_key=partition_key_value)
+                print(f"DEBUG delete_transaction: Successfully called delete_item")
+            except Exception as delete_error:
+                print(f"ERROR delete_transaction: Exception in delete_item call: {delete_error}")
+                print(f"ERROR delete_transaction: delete_item called with: container='transactions', item_id='{actual_doc_id}', partition_key='{partition_key_value}'")
+                raise
             
             print(f"DEBUG delete_transaction: Successfully deleted transaction {transaction_id}")
             return jsonify({'message': 'Transaction deleted successfully'}), 200
