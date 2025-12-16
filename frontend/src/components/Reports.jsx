@@ -525,7 +525,8 @@ function Reports() {
                   </thead>
                   <tbody>
                     {balanceSheet.assets.map((item, index) => {
-                      const hasTransactions = item.id && Math.abs(item.balance) > 0.01
+                      // Make clickable if account has an ID (has chart of account, can have transactions)
+                      const hasTransactions = !!item.id
                       const handleClick = (e) => {
                         e.preventDefault()
                         console.log('Account clicked:', item)
@@ -571,7 +572,8 @@ function Reports() {
                   </thead>
                   <tbody>
                     {balanceSheet.liabilities.map((item, index) => {
-                      const hasTransactions = item.id && Math.abs(item.balance) > 0.01
+                      // Make clickable if account has an ID (has chart of account, can have transactions)
+                      const hasTransactions = !!item.id
                       const handleClick = (e) => {
                         e.preventDefault()
                         console.log('Account clicked:', item)
@@ -617,7 +619,8 @@ function Reports() {
                   </thead>
                   <tbody>
                     {balanceSheet.equity.map((item, index) => {
-                      const hasTransactions = item.id && Math.abs(item.balance) > 0.01
+                      // Make clickable if account has an ID (has chart of account, can have transactions)
+                      const hasTransactions = !!item.id
                       const handleClick = (e) => {
                         e.preventDefault()
                         console.log('Account clicked:', item)
