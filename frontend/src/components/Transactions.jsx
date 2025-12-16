@@ -532,7 +532,7 @@ function Transactions() {
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={!isBalanced}>
-                  Create Transaction
+                  {editingTransactionId ? 'Update Transaction' : 'Create Transaction'}
                 </button>
               </div>
             </form>
