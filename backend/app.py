@@ -4478,10 +4478,219 @@ def get_combined_profit_loss():
 def get_balance_sheet(business_id):
     """Get Balance Sheet report as of a specific date."""
     if USE_COSMOS_DB:
-        # Cosmos DB implementation for balance sheet - TODO: Implement
-        return jsonify({
-            'error': 'Balance Sheet report not yet implemented for Cosmos DB. Please use SQLite mode or implement this feature.'
-        }), 501  # Not Implemented
+        try:
+            as_of_date = request.args.get('as_of_date')
+            
+            if not as_of_date:
+                as_of_date = date.today().isoformat()
+            
+            print(f"Balance Sheet Query (Cosmos DB) - business_id: {business_id}, as_of_date: {as_of_date}")
+            
+            # Get all chart of accounts with ASSET, LIABILITY, or EQUITY category
+            all_accounts = cosmos_get_chart_of_accounts(business_id)
+            
+            # Filter to balance sheet accounts (only active accounts)
+            balance_sheet_accounts = []
+            for acc in all_accounts:
+                # Only include active accounts
+                if not acc.get('is_active', True):
+                    continue
+                
+                account_type = acc.get('account_type', {})
+                if not isinstance(account_type, dict):
+                    account_type = {}
+                category = account_type.get('category')
+                if category in ('ASSET', 'LIABILITY', 'EQUITY'):
+                    balance_sheet_accounts.append(acc)
+            
+            print(f"DEBUG Balance Sheet: Found {len(balance_sheet_accounts)} balance sheet accounts")
+            
+            # Get all transactions up to as_of_date
+            transactions = cosmos_get_transactions(business_id, end_date=as_of_date)
+            print(f"DEBUG Balance Sheet: Found {len(transactions)} transactions up to {as_of_date}")
+            
+            # Calculate account balances from transaction lines
+            account_balances = {}
+            for txn in transactions:
+                txn_date = txn.get('transaction_date', '')
+                # Only process transactions on or before as_of_date
+                if txn_date and txn_date > as_of_date:
+                    continue
+                
+                for line in txn.get('lines', []):
+                    account_id = line.get('chart_of_account_id')
+                    if not account_id:
+                        continue
+                    
+                    # Handle account_id that might be in format "account-{business_id}-{account_id}"
+                    if isinstance(account_id, str) and account_id.startswith('account-'):
+                        parts = account_id.split('-')
+                        if len(parts) >= 3:
+                            try:
+                                account_id = int(parts[2])
+                            except:
+                                continue
+                        else:
+                            continue
+                    
+                    account_id = int(account_id)
+                    
+                    if account_id not in account_balances:
+                        account_balances[account_id] = {
+                            'debit_total': 0.0,
+                            'credit_total': 0.0
+                        }
+                    account_balances[account_id]['debit_total'] += float(line.get('debit_amount', 0) or 0)
+                    account_balances[account_id]['credit_total'] += float(line.get('credit_amount', 0) or 0)
+            
+            print(f"DEBUG Balance Sheet: Calculated balances for {len(account_balances)} accounts")
+            
+            # Build assets, liabilities, and equity lists
+            assets = []
+            liabilities = []
+            equity = []
+            
+            for acc in balance_sheet_accounts:
+                account_id = acc.get('id')
+                if not account_id:
+                    continue
+                account_id = int(account_id)
+                
+                account_type = acc.get('account_type', {})
+                if not isinstance(account_type, dict):
+                    account_type = {}
+                
+                category = account_type.get('category')
+                normal_balance = account_type.get('normal_balance', 'DEBIT')
+                
+                # Calculate balance
+                debit_total = account_balances.get(account_id, {}).get('debit_total', 0.0)
+                credit_total = account_balances.get(account_id, {}).get('credit_total', 0.0)
+                
+                if normal_balance == 'DEBIT':
+                    balance = debit_total - credit_total
+                else:
+                    balance = credit_total - debit_total
+                
+                account_dict = {
+                    'id': account_id,
+                    'account_code': acc.get('account_code'),
+                    'account_name': acc.get('account_name'),
+                    'balance': balance,
+                    'category': category
+                }
+                
+                if category == 'ASSET':
+                    assets.append(account_dict)
+                elif category == 'LIABILITY':
+                    liabilities.append(account_dict)
+                else:  # EQUITY
+                    equity.append(account_dict)
+            
+            # Get bank accounts and add to assets
+            bank_accounts = query_items(
+                'bank_accounts',
+                'SELECT c.bank_account_id as id, c.business_id, c.account_name, c.opening_balance, c.current_balance, c.account_code FROM c WHERE c.type = "bank_account" AND c.business_id = @business_id AND c.is_active = true',
+                [{"name": "@business_id", "value": business_id}],
+                partition_key=str(business_id)
+            )
+            
+            print(f"DEBUG Balance Sheet: Found {len(bank_accounts)} bank accounts")
+            
+            for bank in bank_accounts:
+                bank_id = bank.get('id')
+                bank_account_code = bank.get('account_code') or f'BANK-{bank_id}'
+                
+                # Find the chart of account associated with this bank account
+                bank_chart_account = None
+                for acc in all_accounts:
+                    if acc.get('account_code') == bank_account_code:
+                        bank_chart_account = acc
+                        break
+                
+                # Get opening balance
+                opening_balance = bank.get('opening_balance')
+                if opening_balance is None:
+                    opening_balance = bank.get('current_balance', 0)
+                opening_balance = float(opening_balance or 0)
+                balance = opening_balance
+                
+                if bank_chart_account:
+                    chart_account_id = int(bank_chart_account.get('id'))
+                    if chart_account_id in account_balances:
+                        debit_total = account_balances[chart_account_id]['debit_total']
+                        credit_total = account_balances[chart_account_id]['credit_total']
+                        # Bank accounts are assets (normal balance DEBIT)
+                        # Balance = opening balance + (debits - credits)
+                        balance = opening_balance + (debit_total - credit_total)
+                
+                assets.append({
+                    'account_code': bank_account_code,
+                    'account_name': bank.get('account_name'),
+                    'balance': balance,
+                    'is_bank_account': True
+                })
+            
+            # Get credit card accounts and add to liabilities
+            credit_card_accounts = query_items(
+                'credit_card_accounts',
+                'SELECT c.credit_card_account_id as id, c.business_id, c.account_name, c.current_balance, c.account_code FROM c WHERE c.type = "credit_card_account" AND c.business_id = @business_id AND c.is_active = true',
+                [{"name": "@business_id", "value": business_id}],
+                partition_key=str(business_id)
+            )
+            
+            print(f"DEBUG Balance Sheet: Found {len(credit_card_accounts)} credit card accounts")
+            
+            for cc in credit_card_accounts:
+                cc_id = cc.get('id')
+                liabilities.append({
+                    'account_code': cc.get('account_code') or f'CC-{cc_id}',
+                    'account_name': cc.get('account_name'),
+                    'balance': float(cc.get('current_balance', 0) or 0),
+                    'is_credit_card': True
+                })
+            
+            # Get loan accounts and add to liabilities
+            loan_accounts = query_items(
+                'loan_accounts',
+                'SELECT c.loan_account_id as id, c.business_id, c.account_name, c.current_balance, c.account_code FROM c WHERE c.type = "loan_account" AND c.business_id = @business_id AND c.is_active = true',
+                [{"name": "@business_id", "value": business_id}],
+                partition_key=str(business_id)
+            )
+            
+            print(f"DEBUG Balance Sheet: Found {len(loan_accounts)} loan accounts")
+            
+            for loan in loan_accounts:
+                loan_id = loan.get('id')
+                liabilities.append({
+                    'account_code': loan.get('account_code') or f'LOAN-{loan_id}',
+                    'account_name': loan.get('account_name'),
+                    'balance': float(loan.get('current_balance', 0) or 0),
+                    'is_loan': True
+                })
+            
+            # Calculate totals
+            total_assets = sum(float(a.get('balance', 0)) for a in assets)
+            total_liabilities = sum(float(l.get('balance', 0)) for l in liabilities)
+            total_equity = sum(float(e.get('balance', 0)) for e in equity)
+            
+            print(f"DEBUG Balance Sheet: Totals - Assets: {total_assets}, Liabilities: {total_liabilities}, Equity: {total_equity}")
+            
+            return jsonify({
+                'as_of_date': as_of_date,
+                'assets': assets,
+                'total_assets': total_assets,
+                'liabilities': liabilities,
+                'total_liabilities': total_liabilities,
+                'equity': equity,
+                'total_equity': total_equity,
+                'total_liabilities_and_equity': total_liabilities + total_equity
+            })
+        except Exception as e:
+            import traceback
+            print(f"Error in balance sheet (Cosmos DB): {str(e)}")
+            print(traceback.format_exc())
+            return jsonify({'error': f'Error generating balance sheet: {str(e)}'}), 500
     
     try:
         as_of_date = request.args.get('as_of_date')
