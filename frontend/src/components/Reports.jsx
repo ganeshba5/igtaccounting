@@ -423,73 +423,74 @@ function Reports() {
               </div>
             )}
 
-            {/* Drill-down Transaction Report Modal */}
-            {drillDownAccount && (
-              <div className="modal" onClick={closeDrillDown}>
-                <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px', maxHeight: '80vh', overflow: 'auto' }}>
-                  <div className="modal-header">
-                    <h2>Transaction Details</h2>
-                    <button className="close-btn" onClick={closeDrillDown}>&times;</button>
-                  </div>
-                  
-                  <div style={{ marginBottom: '15px' }}>
-                    <p><strong>Account:</strong> {drillDownAccount.account_code} - {drillDownAccount.account_name}</p>
-                    {profitLoss && (
-                      <p><strong>Period:</strong> {`${new Date(profitLoss.start_date).toLocaleDateString()} - ${new Date(profitLoss.end_date).toLocaleDateString()}`}</p>
-                    )}
-                    {balanceSheet && (
-                      <p><strong>As of:</strong> {new Date(balanceSheet.as_of_date).toLocaleDateString()}</p>
-                    )}
-                    <p><strong>Total:</strong> {formatCurrency(drillDownAccount.balance)}</p>
-                  </div>
+          </div>
+        )}
 
-                  {loadingTransactions ? (
-                    <div style={{ textAlign: 'center', padding: '20px' }}>Loading transactions...</div>
-                  ) : drillDownTransactions.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>No transactions found for this account in the selected period.</div>
-                  ) : (
-                    <div>
-                      <table style={{ width: '100%', fontSize: '14px' }}>
-                        <thead>
-                          <tr>
-                            <th>Date</th>
-                            <th>Description</th>
-                            <th>Reference</th>
-                            <th style={{ textAlign: 'right' }}>Debit</th>
-                            <th style={{ textAlign: 'right' }}>Credit</th>
-                            <th style={{ textAlign: 'right' }}>Amount</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {drillDownTransactions.map((txn) => {
-                            // Find the line for this account
-                            const accountLine = txn.lines?.find(line => line.chart_of_account_id === drillDownAccount.id)
-                            const amount = accountLine ? (accountLine.debit_amount || -accountLine.credit_amount) : 0
-                            
-                            return (
-                              <tr key={txn.id}>
-                                <td>{new Date(txn.transaction_date).toLocaleDateString()}</td>
-                                <td>{txn.description || '-'}</td>
-                                <td>{txn.reference_number || '-'}</td>
-                                <td style={{ textAlign: 'right' }}>{accountLine && accountLine.debit_amount > 0 ? formatCurrency(accountLine.debit_amount) : '-'}</td>
-                                <td style={{ textAlign: 'right' }}>{accountLine && accountLine.credit_amount > 0 ? formatCurrency(accountLine.credit_amount) : '-'}</td>
-                                <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{formatCurrency(amount)}</td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                        <tfoot>
-                          <tr style={{ fontWeight: 'bold', borderTop: '2px solid #333' }}>
-                            <td colSpan="5" style={{ textAlign: 'right' }}>Total:</td>
-                            <td style={{ textAlign: 'right' }}>{formatCurrency(drillDownAccount.balance)}</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  )}
-                </div>
+        {/* Drill-down Transaction Report Modal - Shared for both P&L and Balance Sheet */}
+        {drillDownAccount && (
+          <div className="modal" onClick={closeDrillDown}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px', maxHeight: '80vh', overflow: 'auto' }}>
+              <div className="modal-header">
+                <h2>Transaction Details</h2>
+                <button className="close-btn" onClick={closeDrillDown}>&times;</button>
               </div>
-            )}
+              
+              <div style={{ marginBottom: '15px' }}>
+                <p><strong>Account:</strong> {drillDownAccount.account_code} - {drillDownAccount.account_name}</p>
+                {profitLoss && (
+                  <p><strong>Period:</strong> {`${new Date(profitLoss.start_date).toLocaleDateString()} - ${new Date(profitLoss.end_date).toLocaleDateString()}`}</p>
+                )}
+                {balanceSheet && (
+                  <p><strong>As of:</strong> {new Date(balanceSheet.as_of_date).toLocaleDateString()}</p>
+                )}
+                <p><strong>Total:</strong> {formatCurrency(drillDownAccount.balance)}</p>
+              </div>
+
+              {loadingTransactions ? (
+                <div style={{ textAlign: 'center', padding: '20px' }}>Loading transactions...</div>
+              ) : drillDownTransactions.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>No transactions found for this account in the selected period.</div>
+              ) : (
+                <div>
+                  <table style={{ width: '100%', fontSize: '14px' }}>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Reference</th>
+                        <th style={{ textAlign: 'right' }}>Debit</th>
+                        <th style={{ textAlign: 'right' }}>Credit</th>
+                        <th style={{ textAlign: 'right' }}>Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {drillDownTransactions.map((txn) => {
+                        // Find the line for this account
+                        const accountLine = txn.lines?.find(line => line.chart_of_account_id === drillDownAccount.id)
+                        const amount = accountLine ? (accountLine.debit_amount || -accountLine.credit_amount) : 0
+                        
+                        return (
+                          <tr key={txn.id}>
+                            <td>{new Date(txn.transaction_date).toLocaleDateString()}</td>
+                            <td>{txn.description || '-'}</td>
+                            <td>{txn.reference_number || '-'}</td>
+                            <td style={{ textAlign: 'right' }}>{accountLine && accountLine.debit_amount > 0 ? formatCurrency(accountLine.debit_amount) : '-'}</td>
+                            <td style={{ textAlign: 'right' }}>{accountLine && accountLine.credit_amount > 0 ? formatCurrency(accountLine.credit_amount) : '-'}</td>
+                            <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{formatCurrency(amount)}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ fontWeight: 'bold', borderTop: '2px solid #333' }}>
+                        <td colSpan="5" style={{ textAlign: 'right' }}>Total:</td>
+                        <td style={{ textAlign: 'right' }}>{formatCurrency(drillDownAccount.balance)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

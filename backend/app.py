@@ -4737,16 +4737,27 @@ def get_balance_sheet(business_id):
             
             print(f"DEBUG Balance Sheet: Found {len(bank_accounts)} bank accounts")
             
-            # Create a set of account codes that are already in assets (from chart of accounts)
-            existing_asset_codes = {acc.get('account_code') for acc in assets}
+            # Create sets of account codes, IDs, and names that are already in assets (from chart of accounts)
+            existing_asset_codes = {acc.get('account_code') for acc in assets if acc.get('account_code')}
+            existing_asset_ids = {acc.get('id') for acc in assets if acc.get('id')}
+            existing_asset_names = {acc.get('account_name') for acc in assets if acc.get('account_name')}
+            
+            print(f"DEBUG Balance Sheet: Existing asset codes: {existing_asset_codes}")
+            print(f"DEBUG Balance Sheet: Existing asset IDs: {existing_asset_ids}")
+            print(f"DEBUG Balance Sheet: Existing asset names: {existing_asset_names}")
+            
+            # Track bank accounts we've added to avoid duplicates
+            added_bank_accounts = set()
             
             for bank in bank_accounts:
                 bank_id = bank.get('id')
                 bank_account_code = bank.get('account_code') or f'BANK-{bank_id}'
+                bank_account_name = bank.get('account_name', '')
                 
-                # Skip if this bank account already exists as a chart of account in assets
-                if bank_account_code in existing_asset_codes:
-                    print(f"DEBUG Balance Sheet: Skipping bank account {bank_account_code} - already exists as chart of account")
+                # Create a unique key for this bank account
+                bank_key = (bank_account_code, bank_account_name, bank_id)
+                if bank_key in added_bank_accounts:
+                    print(f"DEBUG Balance Sheet: Skipping duplicate bank account {bank_account_code} - {bank_account_name} (id={bank_id})")
                     continue
                 
                 # Find the chart of account associated with this bank account
@@ -4755,6 +4766,20 @@ def get_balance_sheet(business_id):
                     if acc.get('account_code') == bank_account_code:
                         bank_chart_account = acc
                         break
+                
+                # Skip if this bank account's chart of account already exists in assets
+                if bank_chart_account:
+                    chart_account_id = int(bank_chart_account.get('id'))
+                    if chart_account_id in existing_asset_ids:
+                        print(f"DEBUG Balance Sheet: Skipping bank account {bank_account_code} (id={bank_id}) - chart of account (id={chart_account_id}) already exists in assets")
+                        continue
+                    if bank_account_code in existing_asset_codes:
+                        print(f"DEBUG Balance Sheet: Skipping bank account {bank_account_code} (id={bank_id}) - account code already exists in assets")
+                        continue
+                    # Also check by name if code doesn't match but name does (for safety)
+                    if bank_account_name in existing_asset_names and bank_account_code not in existing_asset_codes:
+                        # This might be a different account with same name, so we'll allow it but log it
+                        print(f"DEBUG Balance Sheet: Warning - bank account {bank_account_code} has same name as existing asset but different code")
                 
                 # Get opening balance
                 opening_balance = bank.get('opening_balance')
@@ -4781,7 +4806,11 @@ def get_balance_sheet(business_id):
                 # Add account ID if there's an associated chart of account
                 if bank_chart_account:
                     bank_account_dict['id'] = int(bank_chart_account.get('id'))
+                
+                # Mark this bank account as added
+                added_bank_accounts.add(bank_key)
                 assets.append(bank_account_dict)
+                print(f"DEBUG Balance Sheet: Added bank account {bank_account_code} - {bank_account_name} with balance {balance}")
             
             # Get credit card accounts and add to liabilities
             credit_card_accounts = query_items(
