@@ -1766,7 +1766,41 @@ def delete_transaction(business_id, transaction_id):
             from azure.cosmos import exceptions as cosmos_exceptions
             
             # Get existing transaction to verify it exists and belongs to business
+            print(f"DEBUG delete_transaction: Looking for transaction_id={transaction_id} (type: {type(transaction_id).__name__}), business_id={business_id} (type: {type(business_id).__name__})")
             transaction = get_transaction(transaction_id, business_id)
+            
+            # If not found, try a direct query as fallback
+            if not transaction:
+                print(f"DEBUG delete_transaction: get_transaction returned None, trying direct query...")
+                try:
+                    direct_results = query_items(
+                        'transactions',
+                        'SELECT * FROM c WHERE c.type = "transaction" AND c.transaction_id = @transaction_id AND c.business_id = @business_id',
+                        [
+                            {"name": "@transaction_id", "value": transaction_id},
+                            {"name": "@business_id", "value": business_id}
+                        ],
+                        partition_key=str(business_id)
+                    )
+                    print(f"DEBUG delete_transaction: Direct query returned {len(direct_results)} results")
+                    if direct_results:
+                        transaction = direct_results[0]
+                        print(f"DEBUG delete_transaction: Found transaction via direct query, id={transaction.get('id')}, transaction_id={transaction.get('transaction_id')}")
+                    else:
+                        # Try querying all transactions for this business to see what exists
+                        all_txns = query_items(
+                            'transactions',
+                            'SELECT c.transaction_id, c.id, c.business_id FROM c WHERE c.type = "transaction" AND c.business_id = @business_id',
+                            [{"name": "@business_id", "value": business_id}],
+                            partition_key=str(business_id)
+                        )
+                        print(f"DEBUG delete_transaction: Found {len(all_txns)} total transactions for business {business_id}")
+                        if all_txns:
+                            sample_ids = [f"id={t.get('id')}, transaction_id={t.get('transaction_id')}" for t in all_txns[:5]]
+                            print(f"DEBUG delete_transaction: Sample transaction IDs: {sample_ids}")
+                except Exception as query_error:
+                    print(f"DEBUG delete_transaction: Error in fallback query: {query_error}")
+            
             if not transaction:
                 print(f"DEBUG delete_transaction: Transaction {transaction_id} not found for business {business_id}")
                 return jsonify({'error': 'Transaction not found'}), 404
