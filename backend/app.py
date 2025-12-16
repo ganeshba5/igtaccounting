@@ -4764,6 +4764,18 @@ def get_balance_sheet(business_id):
                     print(f"DEBUG Balance Sheet: Skipping duplicate bank account {bank_account_code} - {bank_account_name} (id={bank_id})")
                     continue
                 
+                # Check if a bank account with the same name already exists in assets
+                # This prevents duplicates when bank accounts have different codes but same name
+                if bank_account_name:
+                    existing_bank_with_same_name = any(
+                        acc.get('account_name') == bank_account_name and 
+                        (acc.get('is_bank_account') or acc.get('account_code', '').startswith('BANK-'))
+                        for acc in assets
+                    )
+                    if existing_bank_with_same_name:
+                        print(f"DEBUG Balance Sheet: Skipping bank account {bank_account_code} - {bank_account_name} (id={bank_id}) - bank account with same name already exists in assets")
+                        continue
+                
                 # Find the chart of account associated with this bank account
                 bank_chart_account = None
                 for acc in all_accounts:
@@ -4780,10 +4792,6 @@ def get_balance_sheet(business_id):
                     if bank_account_code in existing_asset_codes:
                         print(f"DEBUG Balance Sheet: Skipping bank account {bank_account_code} (id={bank_id}) - account code already exists in assets")
                         continue
-                    # Also check by name if code doesn't match but name does (for safety)
-                    if bank_account_name in existing_asset_names and bank_account_code not in existing_asset_codes:
-                        # This might be a different account with same name, so we'll allow it but log it
-                        print(f"DEBUG Balance Sheet: Warning - bank account {bank_account_code} has same name as existing asset but different code")
                 
                 # Get opening balance
                 opening_balance = bank.get('opening_balance')
