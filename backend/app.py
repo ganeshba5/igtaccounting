@@ -4727,6 +4727,7 @@ def get_balance_sheet(business_id):
                     equity.append(account_dict)
             
             # Get bank accounts and add to assets
+            # But skip if the bank account already exists as a chart of account (to avoid duplicates)
             bank_accounts = query_items(
                 'bank_accounts',
                 'SELECT c.bank_account_id as id, c.business_id, c.account_name, c.opening_balance, c.current_balance, c.account_code FROM c WHERE c.type = "bank_account" AND c.business_id = @business_id AND c.is_active = true',
@@ -4736,9 +4737,17 @@ def get_balance_sheet(business_id):
             
             print(f"DEBUG Balance Sheet: Found {len(bank_accounts)} bank accounts")
             
+            # Create a set of account codes that are already in assets (from chart of accounts)
+            existing_asset_codes = {acc.get('account_code') for acc in assets}
+            
             for bank in bank_accounts:
                 bank_id = bank.get('id')
                 bank_account_code = bank.get('account_code') or f'BANK-{bank_id}'
+                
+                # Skip if this bank account already exists as a chart of account in assets
+                if bank_account_code in existing_asset_codes:
+                    print(f"DEBUG Balance Sheet: Skipping bank account {bank_account_code} - already exists as chart of account")
+                    continue
                 
                 # Find the chart of account associated with this bank account
                 bank_chart_account = None

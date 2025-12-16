@@ -150,6 +150,12 @@ function Reports() {
   }
 
   const loadBalanceSheetAccountTransactions = async (account, asOfDate) => {
+    console.log('loadBalanceSheetAccountTransactions called:', { account, asOfDate, accountId: account.id })
+    if (!account.id) {
+      console.error('Account has no id:', account)
+      alert('Cannot load transactions: Account ID is missing')
+      return
+    }
     setLoadingTransactions(true)
     setDrillDownAccount(account)
     try {
@@ -158,7 +164,9 @@ function Reports() {
         account_id: account.id,
         end_date: asOfDate
       }
+      console.log('Loading transactions with params:', params)
       const response = await api.getTransactions(businessId, params)
+      console.log('Transactions loaded:', response.data.length, 'transactions')
       setDrillDownTransactions(response.data)
     } catch (error) {
       console.error('Error loading account transactions:', error)
@@ -517,16 +525,23 @@ function Reports() {
                   <tbody>
                     {balanceSheet.assets.map((item, index) => {
                       const hasTransactions = item.id && Math.abs(item.balance) > 0.01
+                      const handleClick = (e) => {
+                        e.preventDefault()
+                        console.log('Account clicked:', item)
+                        if (!item.id) {
+                          console.error('Account has no id:', item)
+                          alert('Cannot load transactions: Account ID is missing')
+                          return
+                        }
+                        loadBalanceSheetAccountTransactions(item, balanceSheet.as_of_date)
+                      }
                       return (
                         <tr key={index}>
                           <td>
                             {hasTransactions ? (
                               <a
                                 href="#"
-                                onClick={(e) => {
-                                  e.preventDefault()
-                                  loadBalanceSheetAccountTransactions(item, balanceSheet.as_of_date)
-                                }}
+                                onClick={handleClick}
                                 style={{ color: '#007bff', textDecoration: 'underline', cursor: 'pointer' }}
                               >
                                 {item.account_code || '-'} - {item.account_name}
@@ -556,16 +571,23 @@ function Reports() {
                   <tbody>
                     {balanceSheet.liabilities.map((item, index) => {
                       const hasTransactions = item.id && Math.abs(item.balance) > 0.01
+                      const handleClick = (e) => {
+                        e.preventDefault()
+                        console.log('Account clicked:', item)
+                        if (!item.id) {
+                          console.error('Account has no id:', item)
+                          alert('Cannot load transactions: Account ID is missing')
+                          return
+                        }
+                        loadBalanceSheetAccountTransactions(item, balanceSheet.as_of_date)
+                      }
                       return (
                         <tr key={index}>
                           <td>
                             {hasTransactions ? (
                               <a
                                 href="#"
-                                onClick={(e) => {
-                                  e.preventDefault()
-                                  loadBalanceSheetAccountTransactions(item, balanceSheet.as_of_date)
-                                }}
+                                onClick={handleClick}
                                 style={{ color: '#007bff', textDecoration: 'underline', cursor: 'pointer' }}
                               >
                                 {item.account_code || '-'} - {item.account_name}
@@ -595,16 +617,23 @@ function Reports() {
                   <tbody>
                     {balanceSheet.equity.map((item, index) => {
                       const hasTransactions = item.id && Math.abs(item.balance) > 0.01
+                      const handleClick = (e) => {
+                        e.preventDefault()
+                        console.log('Account clicked:', item)
+                        if (!item.id) {
+                          console.error('Account has no id:', item)
+                          alert('Cannot load transactions: Account ID is missing')
+                          return
+                        }
+                        loadBalanceSheetAccountTransactions(item, balanceSheet.as_of_date)
+                      }
                       return (
                         <tr key={index}>
                           <td>
                             {hasTransactions ? (
                               <a
                                 href="#"
-                                onClick={(e) => {
-                                  e.preventDefault()
-                                  loadBalanceSheetAccountTransactions(item, balanceSheet.as_of_date)
-                                }}
+                                onClick={handleClick}
                                 style={{ color: '#007bff', textDecoration: 'underline', cursor: 'pointer' }}
                               >
                                 {item.account_code || '-'} - {item.account_name}
