@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import api from '../api'
-import axios from 'axios'
-
-const API_BASE_URL = '/api'
+import api, { axiosInstance } from '../api'
 
 function ImportTransactions() {
   const { businessId } = useParams()
@@ -173,7 +170,7 @@ function ImportTransactions() {
         formData.append('revenue_account_id', selectedRevenueAccount)
       }
       
-      console.log('Sending request to:', `${API_BASE_URL}/businesses/${selectedBusinessId}/transactions/import-csv`)
+      console.log('Sending request to:', `/businesses/${selectedBusinessId}/transactions/import-csv`)
       console.log('FormData contents:', {
         hasFile: formData.has('file'),
         bank_account_id: formData.get('bank_account_id'),
@@ -181,8 +178,9 @@ function ImportTransactions() {
         revenue_account_id: formData.get('revenue_account_id')
       })
       
-      const response = await axios.post(
-        `${API_BASE_URL}/businesses/${selectedBusinessId}/transactions/import-csv`,
+      // Use axiosInstance which includes auth token and proper base URL
+      const response = await axiosInstance.post(
+        `/businesses/${selectedBusinessId}/transactions/import-csv`,
         formData,
         {
           headers: {
