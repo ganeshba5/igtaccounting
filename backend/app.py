@@ -1763,9 +1763,12 @@ def delete_transaction(business_id, transaction_id):
     """Delete a transaction."""
     if USE_COSMOS_DB:
         try:
+            from azure.cosmos import exceptions as cosmos_exceptions
+            
             # Get existing transaction to verify it exists and belongs to business
             transaction = get_transaction(transaction_id, business_id)
             if not transaction:
+                print(f"DEBUG delete_transaction: Transaction {transaction_id} not found for business {business_id}")
                 return jsonify({'error': 'Transaction not found'}), 404
             
             # Get the document ID for deletion
@@ -1775,15 +1778,30 @@ def delete_transaction(business_id, transaction_id):
                 # Fallback: construct ID from transaction_id
                 transaction_doc_id = f"transaction-{transaction_id}"
             
-            print(f"DEBUG delete_transaction: Deleting transaction document ID: {transaction_doc_id}, partition_key: {business_id}")
+            # Verify business_id matches
+            txn_business_id = transaction.get('business_id')
+            if txn_business_id and int(txn_business_id) != business_id:
+                print(f"DEBUG delete_transaction: Business ID mismatch - transaction has {txn_business_id}, requested {business_id}")
+                return jsonify({'error': 'Transaction does not belong to this business'}), 403
+            
+            partition_key_value = str(business_id)
+            print(f"DEBUG delete_transaction: Deleting transaction document ID: {transaction_doc_id}, partition_key: {partition_key_value}")
+            print(f"DEBUG delete_transaction: Transaction keys: {list(transaction.keys())}")
             
             # Delete the transaction (lines are embedded, so they'll be deleted too)
             # For transactions container, partition key is /business_id
-            delete_item('transactions', transaction_doc_id, partition_key=str(business_id))
+            delete_item('transactions', transaction_doc_id, partition_key=partition_key_value)
             
+            print(f"DEBUG delete_transaction: Successfully deleted transaction {transaction_id}")
             return jsonify({'message': 'Transaction deleted successfully'}), 200
+        except cosmos_exceptions.CosmosResourceNotFoundError as e:
+            print(f"ERROR delete_transaction: Transaction document not found in Cosmos DB: {e}")
+            return jsonify({'error': 'Transaction not found in database'}), 404
+        except cosmos_exceptions.CosmosAccessConditionFailedError as e:
+            print(f"ERROR delete_transaction: Access condition failed (concurrency conflict): {e}")
+            return jsonify({'error': 'Transaction was modified by another operation. Please try again.'}), 409
         except Exception as e:
-            print(f"Error deleting transaction: {e}")
+            print(f"ERROR delete_transaction: Unexpected error: {e}")
             import traceback
             error_trace = traceback.format_exc()
             print(f"Full traceback:\n{error_trace}")
