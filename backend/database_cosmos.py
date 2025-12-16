@@ -309,7 +309,13 @@ def update_item(container_name: str, item: Dict[str, Any], partition_key: Option
 def delete_item(container_name: str, item_id: str, partition_key: str):
     """Delete an item."""
     container = get_container(container_name)
-    container.delete_item(item=item_id, partition_key=partition_key)
+    print(f"DEBUG delete_item: Deleting from container '{container_name}', item_id='{item_id}', partition_key='{partition_key}' (type: {type(partition_key).__name__})")
+    try:
+        container.delete_item(item=item_id, partition_key=partition_key)
+        print(f"DEBUG delete_item: Successfully deleted item '{item_id}' from '{container_name}'")
+    except Exception as e:
+        print(f"ERROR delete_item: Failed to delete item '{item_id}' from '{container_name}' with partition_key '{partition_key}': {e}")
+        raise
 
 # ========== ACCOUNTING-SPECIFIC QUERIES ==========
 
