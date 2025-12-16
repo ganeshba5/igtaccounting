@@ -2001,8 +2001,12 @@ def bulk_update_transactions(business_id):
                         other_lines = [l for l in lines if l.get('transaction_line_id') != line.get('transaction_line_id')]
                         would_be_duplicate = any(
                             (l.get('chart_of_account_id') == chart_of_account_id) or
-                            (isinstance(l.get('chart_of_account_id'), str) and l.get('chart_of_account_id').startswith('account-') and 
-                             int(l.get('chart_of_account_id').split('-')[2]) == chart_of_account_id if len(l.get('chart_of_account_id', '').split('-')) >= 3 else False)
+                            (lambda acc_id: (
+                                isinstance(acc_id, str) and 
+                                acc_id.startswith('account-') and 
+                                len(acc_id.split('-')) >= 3 and
+                                int(acc_id.split('-')[2]) == chart_of_account_id
+                            ) if acc_id else False)(l.get('chart_of_account_id'))
                             for l in other_lines
                         )
                         
