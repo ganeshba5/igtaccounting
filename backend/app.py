@@ -4622,12 +4622,20 @@ def get_balance_sheet(business_id):
     """Get Balance Sheet report as of a specific date."""
     if USE_COSMOS_DB:
         try:
+            year = request.args.get('year')
             as_of_date = request.args.get('as_of_date')
             
-            if not as_of_date:
+            # If year is provided, set as_of_date to last day of that year
+            if year:
+                try:
+                    year_int = int(year)
+                    as_of_date = f'{year_int}-12-31'
+                except ValueError:
+                    return jsonify({'error': 'Invalid year parameter'}), 400
+            elif not as_of_date:
                 as_of_date = date.today().isoformat()
             
-            print(f"Balance Sheet Query (Cosmos DB) - business_id: {business_id}, as_of_date: {as_of_date}")
+            print(f"Balance Sheet Query (Cosmos DB) - business_id: {business_id}, year: {year}, as_of_date: {as_of_date}")
             
             # Get all chart of accounts with ASSET, LIABILITY, or EQUITY category
             all_accounts = cosmos_get_chart_of_accounts(business_id)
@@ -4689,6 +4697,7 @@ def get_balance_sheet(business_id):
             print(f"DEBUG Balance Sheet: Calculated balances for {len(account_balances)} accounts")
             
             # Build assets, liabilities, and equity lists
+            # Only include accounts that have transactions in the selected period
             assets = []
             liabilities = []
             equity = []
@@ -4698,6 +4707,10 @@ def get_balance_sheet(business_id):
                 if not account_id:
                     continue
                 account_id = int(account_id)
+                
+                # Only include accounts that have transactions (are in account_balances)
+                if account_id not in account_balances:
+                    continue
                 
                 account_type = acc.get('account_type', {})
                 if not isinstance(account_type, dict):
@@ -4862,14 +4875,86 @@ def get_balance_sheet(business_id):
                     'is_loan': True
                 })
             
+            # Calculate retained earnings
+            # a) Opening balance + all prior years net income
+            # b) Net income for current year to as_of_date
+            retained_earnings_a = 0.0  # Opening balance + prior years
+            retained_earnings_b = 0.0  # Current year net income to as_of_date
+            retained_earnings_total = 0.0
+            
+            try:
+                # Determine the year from as_of_date if year not provided
+                year_int = int(year) if year else int(as_of_date.split('-')[0])
+                current_year = date.today().year
+                
+                # Calculate net income for all prior years (before the selected year)
+                prior_years_net_income = 0.0
+                for y in range(2000, year_int):  # Start from 2000, adjust if needed
+                    try:
+                        # Get P&L for this year
+                        pl_accounts = cosmos_get_profit_loss_accounts(business_id, f'{y}-01-01', f'{y}-12-31')
+                        year_revenue = 0.0
+                        year_expenses = 0.0
+                        for acc in pl_accounts:
+                            balance = acc.get('balance', 0.0)
+                            category = acc.get('account_type', {}).get('category', '')
+                            if category == 'REVENUE':
+                                year_revenue += balance
+                            else:  # EXPENSE
+                                year_expenses += balance
+                        year_net_income = year_revenue - year_expenses
+                        prior_years_net_income += year_net_income
+                    except Exception as e:
+                        print(f"Error calculating net income for year {y}: {e}")
+                        continue
+                
+                retained_earnings_a = prior_years_net_income
+                
+                # Calculate net income for selected year to as_of_date
+                start_date = f'{year_int}-01-01'
+                pl_accounts = cosmos_get_profit_loss_accounts(business_id, start_date, as_of_date)
+                current_year_revenue = 0.0
+                current_year_expenses = 0.0
+                for acc in pl_accounts:
+                    balance = acc.get('balance', 0.0)
+                    category = acc.get('account_type', {}).get('category', '')
+                    if category == 'REVENUE':
+                        current_year_revenue += balance
+                    else:  # EXPENSE
+                        current_year_expenses += balance
+                retained_earnings_b = current_year_revenue - current_year_expenses
+                
+            except Exception as e:
+                print(f"Error calculating retained earnings: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            retained_earnings_total = retained_earnings_a + retained_earnings_b
+            
+            # Add retained earnings to equity
+            if retained_earnings_total != 0.0:
+                equity.append({
+                    'account_code': 'RE',
+                    'account_name': 'Retained Earnings',
+                    'balance': retained_earnings_total,
+                    'is_retained_earnings': True,
+                    'retained_earnings_a': retained_earnings_a,
+                    'retained_earnings_b': retained_earnings_b
+                })
+            
             # Calculate totals
             total_assets = sum(float(a.get('balance', 0)) for a in assets)
             total_liabilities = sum(float(l.get('balance', 0)) for l in liabilities)
             total_equity = sum(float(e.get('balance', 0)) for e in equity)
             
             print(f"DEBUG Balance Sheet: Totals - Assets: {total_assets}, Liabilities: {total_liabilities}, Equity: {total_equity}")
+            print(f"DEBUG Balance Sheet: Retained Earnings - a: {retained_earnings_a}, b: {retained_earnings_b}, total: {retained_earnings_total}")
+            
+            # Determine year for response
+            response_year = year if year else as_of_date.split('-')[0]
             
             return jsonify({
+                'year': response_year,
                 'as_of_date': as_of_date,
                 'assets': assets,
                 'total_assets': total_assets,
@@ -4877,7 +4962,12 @@ def get_balance_sheet(business_id):
                 'total_liabilities': total_liabilities,
                 'equity': equity,
                 'total_equity': total_equity,
-                'total_liabilities_and_equity': total_liabilities + total_equity
+                'total_liabilities_and_equity': total_liabilities + total_equity,
+                'retained_earnings': {
+                    'prior_years': retained_earnings_a,
+                    'current_year': retained_earnings_b,
+                    'total': retained_earnings_total
+                }
             })
         except Exception as e:
             import traceback

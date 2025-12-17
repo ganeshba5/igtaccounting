@@ -78,7 +78,9 @@ function Reports() {
     ]
   }
   
+  const currentYear = new Date().getFullYear()
   const [bsFilters, setBsFilters] = useState({
+    year: currentYear.toString(),
     as_of_date: new Date().toISOString().split('T')[0]
   })
 
@@ -119,7 +121,11 @@ function Reports() {
   const loadBalanceSheet = async () => {
     setLoading(true)
     try {
-      const response = await api.getBalanceSheet(businessId, { as_of_date: bsFilters.as_of_date })
+      const params = {
+        year: bsFilters.year,
+        as_of_date: bsFilters.as_of_date
+      }
+      const response = await api.getBalanceSheet(businessId, params)
       setBalanceSheet(response.data)
     } catch (error) {
       console.error('Error loading balance sheet:', error)
@@ -128,6 +134,23 @@ function Reports() {
       setLoading(false)
     }
   }
+
+  // Update as_of_date when year changes
+  useEffect(() => {
+    if (bsFilters.year) {
+      const yearInt = parseInt(bsFilters.year)
+      const isCurrentYear = yearInt === currentYear
+      if (isCurrentYear) {
+        // For current year, allow editing as_of_date, default to today
+        if (!bsFilters.as_of_date || bsFilters.as_of_date.split('-')[0] !== bsFilters.year) {
+          setBsFilters(prev => ({ ...prev, as_of_date: new Date().toISOString().split('T')[0] }))
+        }
+      } else {
+        // For prior years, set to last day of that year (readonly)
+        setBsFilters(prev => ({ ...prev, as_of_date: `${yearInt}-12-31` }))
+      }
+    }
+  }, [bsFilters.year, currentYear])
 
   const loadAccountTransactions = async (account, startDate, endDate) => {
     setLoadingTransactions(true)
@@ -497,18 +520,34 @@ function Reports() {
         {activeTab === 'balance-sheet' && (
           <div>
             <div style={{ marginBottom: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '4px' }}>
-              <div className="form-group">
-                <label>As of Date</label>
-                <input
-                  type="date"
-                  value={bsFilters.as_of_date}
-                  onChange={(e) => setBsFilters({ ...bsFilters, as_of_date: e.target.value })}
-                  style={{ width: '200px' }}
-                />
+              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div className="form-group">
+                  <label>Year</label>
+                  <select
+                    value={bsFilters.year}
+                    onChange={(e) => setBsFilters({ ...bsFilters, year: e.target.value })}
+                    style={{ width: '150px' }}
+                  >
+                    {getYearOptions().map(y => (
+                      <option key={y} value={y.toString()}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>As of Date</label>
+                  <input
+                    type="date"
+                    value={bsFilters.as_of_date}
+                    onChange={(e) => setBsFilters({ ...bsFilters, as_of_date: e.target.value })}
+                    disabled={parseInt(bsFilters.year) !== currentYear}
+                    readOnly={parseInt(bsFilters.year) !== currentYear}
+                    style={{ width: '200px', opacity: parseInt(bsFilters.year) !== currentYear ? 0.6 : 1 }}
+                  />
+                </div>
+                <button className="btn btn-primary" onClick={loadBalanceSheet} disabled={loading}>
+                  {loading ? 'Loading...' : 'Load Report'}
+                </button>
               </div>
-              <button className="btn btn-primary" onClick={loadBalanceSheet} disabled={loading}>
-                {loading ? 'Loading...' : 'Load Report'}
-              </button>
             </div>
 
             {balanceSheet && (
@@ -619,6 +658,11 @@ function Reports() {
                   </thead>
                   <tbody>
                     {balanceSheet.equity.map((item, index) => {
+                      // Skip retained earnings if it's a separate entry - we'll show it separately
+                      if (item.is_retained_earnings) {
+                        return null
+                      }
+                      
                       // Make clickable if account has an ID (has chart of account, can have transactions)
                       const hasTransactions = !!item.id
                       const handleClick = (e) => {
@@ -650,6 +694,27 @@ function Reports() {
                         </tr>
                       )
                     })}
+                    {/* Retained Earnings Breakdown */}
+                    {balanceSheet.retained_earnings && balanceSheet.retained_earnings.total !== 0 && (
+                      <>
+                        <tr>
+                          <td style={{ paddingLeft: '20px' }}>
+                            Opening Balance + Prior Years Net Income
+                          </td>
+                          <td style={{ textAlign: 'right' }}>{formatCurrency(balanceSheet.retained_earnings.prior_years)}</td>
+                        </tr>
+                        <tr>
+                          <td style={{ paddingLeft: '20px' }}>
+                            Net Income {balanceSheet.year ? `(${balanceSheet.year})` : '(Current Year)'} to {new Date(balanceSheet.as_of_date).toLocaleDateString()}
+                          </td>
+                          <td style={{ textAlign: 'right' }}>{formatCurrency(balanceSheet.retained_earnings.current_year)}</td>
+                        </tr>
+                        <tr style={{ fontWeight: 'bold' }}>
+                          <td>Retained Earnings</td>
+                          <td style={{ textAlign: 'right' }}>{formatCurrency(balanceSheet.retained_earnings.total)}</td>
+                        </tr>
+                      </>
+                    )}
                     <tr style={{ fontWeight: 'bold', borderTop: '2px solid #333' }}>
                       <td>Total Equity</td>
                       <td style={{ textAlign: 'right' }}>{formatCurrency(balanceSheet.total_equity)}</td>
