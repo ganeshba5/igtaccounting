@@ -72,14 +72,17 @@ function Transactions() {
 
   useEffect(() => {
     if (businessId) {
-      // Reset initial load flag when businessId changes
-      if (isInitialLoad) {
-        setIsInitialLoad(true)
-      }
       loadData()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId, accountFilter, descriptionFilter])
+  
+  // Reset initial load flag when businessId changes
+  useEffect(() => {
+    if (businessId) {
+      setIsInitialLoad(true)
+    }
+  }, [businessId])
 
   const addLine = () => {
     setFormData({
