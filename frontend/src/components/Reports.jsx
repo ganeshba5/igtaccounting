@@ -11,6 +11,7 @@ function Reports() {
   const [drillDownAccount, setDrillDownAccount] = useState(null)
   const [drillDownTransactions, setDrillDownTransactions] = useState([])
   const [loadingTransactions, setLoadingTransactions] = useState(false)
+  const [business, setBusiness] = useState(null)
   
   const [plFilters, setPlFilters] = useState({
     dateFilterType: 'currentYearToDate', // 'currentMonthToDate', 'lastMonth', 'currentYearToDate', 'lastYear', 'custom'
@@ -206,6 +207,21 @@ function Reports() {
   }
 
   useEffect(() => {
+    if (businessId) {
+      loadBusiness()
+    }
+  }, [businessId])
+
+  const loadBusiness = async () => {
+    try {
+      const response = await api.getBusiness(businessId)
+      setBusiness(response.data)
+    } catch (error) {
+      console.error('Error loading business:', error)
+    }
+  }
+
+  useEffect(() => {
     if (activeTab === 'profit-loss') {
       loadProfitLoss()
     } else {
@@ -324,7 +340,7 @@ function Reports() {
 
             {profitLoss && (
               <div>
-                <h2>Profit & Loss Statement</h2>
+                <h2>Profit and Loss Statement{business ? ` for ${business.name}` : ''}</h2>
                 <p>
                   Period: {new Date(profitLoss.start_date).toLocaleDateString()} - {new Date(profitLoss.end_date).toLocaleDateString()}
                 </p>
@@ -552,7 +568,7 @@ function Reports() {
 
             {balanceSheet && (
               <div>
-                <h2>Balance Sheet</h2>
+                <h2>Balance Sheet{business ? ` for ${business.name}` : ''}</h2>
                 <p>As of: {new Date(balanceSheet.as_of_date).toLocaleDateString()}</p>
 
                 <table>
