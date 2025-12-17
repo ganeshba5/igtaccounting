@@ -695,7 +695,7 @@ function Reports() {
                       )
                     })}
                     {/* Retained Earnings Breakdown */}
-                    {balanceSheet.retained_earnings && balanceSheet.retained_earnings.total !== 0 && (
+                    {balanceSheet.retained_earnings && (
                       <>
                         <tr>
                           <td style={{ paddingLeft: '20px' }}>

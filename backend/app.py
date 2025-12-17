@@ -4931,16 +4931,15 @@ def get_balance_sheet(business_id):
             
             retained_earnings_total = retained_earnings_a + retained_earnings_b
             
-            # Add retained earnings to equity
-            if retained_earnings_total != 0.0:
-                equity.append({
-                    'account_code': 'RE',
-                    'account_name': 'Retained Earnings',
-                    'balance': retained_earnings_total,
-                    'is_retained_earnings': True,
-                    'retained_earnings_a': retained_earnings_a,
-                    'retained_earnings_b': retained_earnings_b
-                })
+            # Always add retained earnings to equity (even if zero, for display purposes)
+            equity.append({
+                'account_code': 'RE',
+                'account_name': 'Retained Earnings',
+                'balance': retained_earnings_total,
+                'is_retained_earnings': True,
+                'retained_earnings_a': retained_earnings_a,
+                'retained_earnings_b': retained_earnings_b
+            })
             
             # Calculate totals
             total_assets = sum(float(a.get('balance', 0)) for a in assets)
