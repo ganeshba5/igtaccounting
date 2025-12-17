@@ -4876,20 +4876,25 @@ def get_balance_sheet(business_id):
                 })
             
             # Calculate retained earnings
-            # a) Opening balance + all prior years net income
-            # b) Net income for current year to as_of_date
-            retained_earnings_a = 0.0  # Opening balance + prior years
-            retained_earnings_b = 0.0  # Current year net income to as_of_date
+            # Prior Years Net Income = Opening Balance + Net Income for all prior years
+            # Current Year Net Income = Net Income from Jan 1 to as_of_date
+            # Total Retained Earnings = Prior Years Net Income + Current Year Net Income
+            opening_balance = 0.0
+            prior_years_net_income = 0.0
+            current_year_net_income = 0.0
             retained_earnings_total = 0.0
             
             try:
                 # Determine the year from as_of_date if year not provided
                 year_int = int(year) if year else int(as_of_date.split('-')[0])
-                current_year = date.today().year
+                earliest_year = 2000  # Start from 2000
+                
+                # Opening balance: For now, set to 0 (assumes business started in 2000 or later)
+                # In a full implementation, this could be calculated from earliest transaction date
+                opening_balance = 0.0
                 
                 # Calculate net income for all prior years (before the selected year)
-                prior_years_net_income = 0.0
-                for y in range(2000, year_int):  # Start from 2000, adjust if needed
+                for y in range(earliest_year, year_int):
                     try:
                         # Get P&L for this year
                         pl_accounts = cosmos_get_profit_loss_accounts(business_id, f'{y}-01-01', f'{y}-12-31')
@@ -4908,7 +4913,8 @@ def get_balance_sheet(business_id):
                         print(f"Error calculating net income for year {y}: {e}")
                         continue
                 
-                retained_earnings_a = prior_years_net_income
+                # Prior Years Net Income includes opening balance
+                prior_years_net_income = opening_balance + prior_years_net_income
                 
                 # Calculate net income for selected year to as_of_date
                 start_date = f'{year_int}-01-01'
@@ -4922,14 +4928,14 @@ def get_balance_sheet(business_id):
                         current_year_revenue += balance
                     else:  # EXPENSE
                         current_year_expenses += balance
-                retained_earnings_b = current_year_revenue - current_year_expenses
+                current_year_net_income = current_year_revenue - current_year_expenses
                 
             except Exception as e:
                 print(f"Error calculating retained earnings: {e}")
                 import traceback
                 traceback.print_exc()
             
-            retained_earnings_total = retained_earnings_a + retained_earnings_b
+            retained_earnings_total = prior_years_net_income + current_year_net_income
             
             # Always add retained earnings to equity (even if zero, for display purposes)
             equity.append({
@@ -4937,17 +4943,21 @@ def get_balance_sheet(business_id):
                 'account_name': 'Retained Earnings',
                 'balance': retained_earnings_total,
                 'is_retained_earnings': True,
-                'retained_earnings_a': retained_earnings_a,
-                'retained_earnings_b': retained_earnings_b
+                'prior_years_net_income': prior_years_net_income,
+                'current_year_net_income': current_year_net_income
             })
             
             # Calculate totals
             total_assets = sum(float(a.get('balance', 0)) for a in assets)
             total_liabilities = sum(float(l.get('balance', 0)) for l in liabilities)
             total_equity = sum(float(e.get('balance', 0)) for e in equity)
+            total_liabilities_and_equity = total_liabilities + total_equity
             
+            # Ensure totals balance - if they don't match, it's likely due to rounding or missing data
+            # We'll use the calculated total_liabilities_and_equity for consistency
             print(f"DEBUG Balance Sheet: Totals - Assets: {total_assets}, Liabilities: {total_liabilities}, Equity: {total_equity}")
-            print(f"DEBUG Balance Sheet: Retained Earnings - a: {retained_earnings_a}, b: {retained_earnings_b}, total: {retained_earnings_total}")
+            print(f"DEBUG Balance Sheet: Total Liabilities + Equity: {total_liabilities_and_equity}")
+            print(f"DEBUG Balance Sheet: Retained Earnings - Prior Years: {prior_years_net_income}, Current Year: {current_year_net_income}, Total: {retained_earnings_total}")
             
             # Determine year for response
             response_year = year if year else as_of_date.split('-')[0]
@@ -4961,10 +4971,10 @@ def get_balance_sheet(business_id):
                 'total_liabilities': total_liabilities,
                 'equity': equity,
                 'total_equity': total_equity,
-                'total_liabilities_and_equity': total_liabilities + total_equity,
+                'total_liabilities_and_equity': total_liabilities_and_equity,
                 'retained_earnings': {
-                    'prior_years': retained_earnings_a,
-                    'current_year': retained_earnings_b,
+                    'prior_years_net_income': prior_years_net_income,
+                    'current_year_net_income': current_year_net_income,
                     'total': retained_earnings_total
                 }
             })

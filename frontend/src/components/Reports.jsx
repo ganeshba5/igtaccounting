@@ -699,18 +699,18 @@ function Reports() {
                       <>
                         <tr>
                           <td style={{ paddingLeft: '20px' }}>
-                            Opening Balance + Prior Years Net Income
+                            Prior Years Net Income (including Opening Balance)
                           </td>
-                          <td style={{ textAlign: 'right' }}>{formatCurrency(balanceSheet.retained_earnings.prior_years)}</td>
+                          <td style={{ textAlign: 'right' }}>{formatCurrency(balanceSheet.retained_earnings.prior_years_net_income)}</td>
                         </tr>
                         <tr>
                           <td style={{ paddingLeft: '20px' }}>
                             Net Income {balanceSheet.year ? `(${balanceSheet.year})` : '(Current Year)'} to {new Date(balanceSheet.as_of_date).toLocaleDateString()}
                           </td>
-                          <td style={{ textAlign: 'right' }}>{formatCurrency(balanceSheet.retained_earnings.current_year)}</td>
+                          <td style={{ textAlign: 'right' }}>{formatCurrency(balanceSheet.retained_earnings.current_year_net_income)}</td>
                         </tr>
                         <tr style={{ fontWeight: 'bold' }}>
-                          <td>Retained Earnings</td>
+                          <td>Total Retained Earnings</td>
                           <td style={{ textAlign: 'right' }}>{formatCurrency(balanceSheet.retained_earnings.total)}</td>
                         </tr>
                       </>
