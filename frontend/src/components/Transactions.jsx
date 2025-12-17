@@ -29,9 +29,14 @@ function Transactions() {
     ]
   })
 
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
+  
   const loadData = async () => {
     try {
-      setLoading(true)
+      // Only show loading overlay on initial load, not on filter changes
+      if (isInitialLoad) {
+        setLoading(true)
+      }
       const params = {}
       if (accountFilter) {
         params.account_id = accountFilter
@@ -47,8 +52,10 @@ function Transactions() {
       setTransactions(txnsRes.data)
       setAccounts(accountsRes.data)
       setFilteredTransactions(txnsRes.data)
+      setIsInitialLoad(false)
     } catch (error) {
       console.error('Error loading data:', error)
+      setIsInitialLoad(false)
     } finally {
       setLoading(false)
     }
@@ -65,8 +72,13 @@ function Transactions() {
 
   useEffect(() => {
     if (businessId) {
+      // Reset initial load flag when businessId changes
+      if (isInitialLoad) {
+        setIsInitialLoad(true)
+      }
       loadData()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId, accountFilter, descriptionFilter])
 
   const addLine = () => {
