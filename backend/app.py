@@ -4701,6 +4701,7 @@ def get_balance_sheet(business_id):
             assets = []
             liabilities = []
             equity = []
+            opening_balance_from_equity = 0.0  # Track opening balance from equity accounts
             
             for acc in balance_sheet_accounts:
                 account_id = acc.get('id')
@@ -4708,15 +4709,41 @@ def get_balance_sheet(business_id):
                     continue
                 account_id = int(account_id)
                 
-                # Only include accounts that have transactions (are in account_balances)
-                if account_id not in account_balances:
-                    continue
-                
                 account_type = acc.get('account_type', {})
                 if not isinstance(account_type, dict):
                     account_type = {}
                 
                 category = account_type.get('category')
+                account_code = acc.get('account_code', '').upper()
+                account_name = acc.get('account_name', '').upper()
+                
+                # Check if this is an "Opening Balance" equity account - exclude it from equity list
+                # but include its balance in opening balance calculation
+                is_opening_balance_account = (
+                    category == 'EQUITY' and 
+                    ('OPENING BALANCE' in account_name or 
+                     account_code in ['3030', 'OB', 'OPENING'])
+                )
+                
+                if is_opening_balance_account:
+                    # Calculate balance for opening balance account
+                    normal_balance = account_type.get('normal_balance', 'CREDIT')
+                    debit_total = account_balances.get(account_id, {}).get('debit_total', 0.0)
+                    credit_total = account_balances.get(account_id, {}).get('credit_total', 0.0)
+                    
+                    if normal_balance == 'DEBIT':
+                        balance = debit_total - credit_total
+                    else:
+                        balance = credit_total - debit_total
+                    
+                    opening_balance_from_equity += balance
+                    print(f"DEBUG Balance Sheet: Found Opening Balance equity account {account_code} - {acc.get('account_name')} with balance {balance}")
+                    continue  # Skip adding to equity list
+                
+                # Only include accounts that have transactions (are in account_balances)
+                if account_id not in account_balances:
+                    continue
+                
                 normal_balance = account_type.get('normal_balance', 'DEBIT')
                 
                 # Calculate balance
@@ -4740,7 +4767,7 @@ def get_balance_sheet(business_id):
                     assets.append(account_dict)
                 elif category == 'LIABILITY':
                     liabilities.append(account_dict)
-                else:  # EQUITY
+                else:  # EQUITY (excluding opening balance accounts)
                     equity.append(account_dict)
             
             # Get bank accounts and add to assets
@@ -4879,7 +4906,6 @@ def get_balance_sheet(business_id):
             # Prior Years Net Income = Opening Balance + Net Income for all prior years
             # Current Year Net Income = Net Income from Jan 1 to as_of_date
             # Total Retained Earnings = Prior Years Net Income + Current Year Net Income
-            opening_balance = 0.0
             prior_years_net_income = 0.0
             current_year_net_income = 0.0
             retained_earnings_total = 0.0
@@ -4889,9 +4915,9 @@ def get_balance_sheet(business_id):
                 year_int = int(year) if year else int(as_of_date.split('-')[0])
                 earliest_year = 2000  # Start from 2000
                 
-                # Opening balance: For now, set to 0 (assumes business started in 2000 or later)
-                # In a full implementation, this could be calculated from earliest transaction date
-                opening_balance = 0.0
+                # Opening balance from equity accounts (already extracted above)
+                opening_balance = opening_balance_from_equity
+                print(f"DEBUG Balance Sheet: Opening balance from equity accounts: {opening_balance}")
                 
                 # Calculate net income for all prior years (before the selected year)
                 for y in range(earliest_year, year_int):
@@ -4913,8 +4939,9 @@ def get_balance_sheet(business_id):
                         print(f"Error calculating net income for year {y}: {e}")
                         continue
                 
-                # Prior Years Net Income includes opening balance
+                # Prior Years Net Income includes opening balance from equity accounts
                 prior_years_net_income = opening_balance + prior_years_net_income
+                print(f"DEBUG Balance Sheet: Prior years net income calculation - Opening: {opening_balance}, Prior Years P&L: {prior_years_net_income - opening_balance}, Total: {prior_years_net_income}")
                 
                 # Calculate net income for selected year to as_of_date
                 start_date = f'{year_int}-01-01'
