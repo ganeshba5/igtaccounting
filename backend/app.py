@@ -4714,19 +4714,21 @@ def get_balance_sheet(business_id):
                     account_type = {}
                 
                 category = account_type.get('category')
-                account_code = acc.get('account_code', '').upper()
-                account_name = acc.get('account_name', '').upper()
+                account_code = acc.get('account_code', '')
+                account_name = acc.get('account_name', '')
+                account_code_upper = account_code.upper()
+                account_name_upper = account_name.upper()
                 
                 # Check if this is an "Opening Balance" equity account - exclude it from equity list
                 # but include its balance in opening balance calculation
                 is_opening_balance_account = (
                     category == 'EQUITY' and 
-                    ('OPENING BALANCE' in account_name or 
-                     account_code in ['3030', 'OB', 'OPENING'])
+                    ('OPENING BALANCE' in account_name_upper or 
+                     account_code_upper in ['3030', 'OB', 'OPENING'])
                 )
                 
                 if is_opening_balance_account:
-                    # Calculate balance for opening balance account
+                    # Calculate balance for opening balance account (even if no transactions)
                     normal_balance = account_type.get('normal_balance', 'CREDIT')
                     debit_total = account_balances.get(account_id, {}).get('debit_total', 0.0)
                     credit_total = account_balances.get(account_id, {}).get('credit_total', 0.0)
@@ -4737,7 +4739,7 @@ def get_balance_sheet(business_id):
                         balance = credit_total - debit_total
                     
                     opening_balance_from_equity += balance
-                    print(f"DEBUG Balance Sheet: Found Opening Balance equity account {account_code} - {acc.get('account_name')} with balance {balance}")
+                    print(f"DEBUG Balance Sheet: Found Opening Balance equity account {account_code} - {account_name} with balance {balance}")
                     continue  # Skip adding to equity list
                 
                 # Only include accounts that have transactions (are in account_balances)
