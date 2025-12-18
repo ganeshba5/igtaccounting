@@ -2584,6 +2584,9 @@ def delete_transaction_type_mapping(mapping_id):
 def import_transactions_csv(business_id):
     """Import transactions from CSV file."""
     try:
+        print(f"DEBUG import_transactions_csv: Received request for business_id={business_id}")
+        print(f"DEBUG import_transactions_csv: Files in request: {list(request.files.keys())}")
+        print(f"DEBUG import_transactions_csv: Form data: {dict(request.form)}")
         # Check if file is present
         if 'file' not in request.files:
             return jsonify({'error': 'No file uploaded'}), 400
@@ -2731,11 +2734,15 @@ def import_transactions_csv(business_id):
                 continue
         
         if header_row_idx is None:
-            return jsonify({
-                'error': f'CSV format not recognized. Could not find header row in first 20 lines.\n'
+            error_msg = (f'CSV format not recognized. Could not find header row in first 20 lines.\n'
                         f'Format 1 requires: {", ".join(format1_columns)}\n'
                         f'Format 2 requires: {", ".join(format2_columns)} (or aliases: Date, Running Bal.)\n'
-                        f'Format 3 requires: {", ".join(format3_columns)}',
+                        f'Format 3 requires: {", ".join(format3_columns)}')
+            if lines:
+                error_msg += f'\n\nFirst few lines of CSV:\n' + '\n'.join(lines[:5])
+            print(f"DEBUG import_transactions_csv: {error_msg}")
+            return jsonify({
+                'error': error_msg,
                 'scanned_lines': min(20, len(lines))
             }), 400
         
@@ -2808,13 +2815,17 @@ def import_transactions_csv(business_id):
         elif all(col in csv_reader.fieldnames for col in format3_columns):
             csv_format = 'format3'  # Format with separate Credit and Debit columns
         else:
-            return jsonify({
-                'error': f'CSV format not recognized after normalization. Required columns:\n'
+            error_msg = (f'CSV format not recognized after normalization. Required columns:\n'
                         f'Format 1: {", ".join(format1_columns)}\n'
                         f'Format 2: {", ".join(format2_columns)} (or aliases: Date, Running Bal.)\n'
-                        f'Format 3: {", ".join(format3_columns)}',
-                'found_columns': original_fieldnames,
-                'normalized_columns': csv_reader.fieldnames,
+                        f'Format 3: {", ".join(format3_columns)}\n\n'
+                        f'Found columns: {", ".join(original_fieldnames) if original_fieldnames else "None"}\n'
+                        f'Normalized columns: {", ".join(csv_reader.fieldnames) if csv_reader.fieldnames else "None"}')
+            print(f"DEBUG import_transactions_csv: {error_msg}")
+            return jsonify({
+                'error': error_msg,
+                'found_columns': list(original_fieldnames) if original_fieldnames else [],
+                'normalized_columns': list(csv_reader.fieldnames) if csv_reader.fieldnames else [],
                 'header_row_index': header_row_idx + 1
             }), 400
         

@@ -202,7 +202,26 @@ function ImportTransactions() {
       }
     } catch (error) {
       console.error('Error importing CSV:', error)
-      alert('Error importing CSV: ' + (error.response?.data?.error || error.message))
+      console.error('Error response:', error.response)
+      console.error('Error data:', error.response?.data)
+      
+      let errorMessage = 'Unknown error occurred'
+      if (error.response?.data) {
+        // Try different possible error message formats
+        if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data
+        } else if (error.response.data.error) {
+          errorMessage = error.response.data.error
+        } else if (error.response.data.message) {
+          errorMessage = error.response.data.message
+        } else {
+          errorMessage = JSON.stringify(error.response.data)
+        }
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      alert('Error importing CSV: ' + errorMessage)
     } finally {
       setLoading(false)
     }
