@@ -498,7 +498,8 @@ def delete_business(business_id):
         
         # Note: In Cosmos DB, cascading deletes must be done manually
         # For now, just delete the business. Related data cleanup can be added later.
-        delete_item('businesses', f'business-{business_id}', partition_key=str(business_id))
+        # Businesses container uses /id as partition key
+        delete_item('businesses', f'business-{business_id}', partition_key=f'business-{business_id}')
         return jsonify({'message': 'Business deleted successfully'}), 200
     else:
         conn = get_db_connection()
