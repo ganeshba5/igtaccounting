@@ -373,7 +373,8 @@ def create_business():
                 'updated_at': datetime.utcnow().isoformat()
             }
             
-            created = create_item('businesses', business_doc, partition_key=str(next_id))
+            # Businesses container uses /id as partition key, so partition_key should be the document id
+            created = create_item('businesses', business_doc, partition_key=business_doc['id'])
             return jsonify({
                 'id': created.get('business_id') or created.get('id'),
                 'name': created['name'],
