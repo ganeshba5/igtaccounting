@@ -462,6 +462,12 @@ def get_profit_loss_accounts(
         for line in txn.get('lines', []):
             account_id = line.get('chart_of_account_id')
             if account_id:
+                # Normalize account_id to int for consistent matching
+                try:
+                    account_id = int(account_id)
+                except (ValueError, TypeError):
+                    # If it's not a number, skip this line
+                    continue
                 if account_id not in account_balances:
                     account_balances[account_id] = {
                         'debit_total': 0.0,
@@ -472,7 +478,14 @@ def get_profit_loss_accounts(
     
     # Calculate balances and attach to accounts
     for acc in revenue_expense_accounts:
-        account_id = acc['id']
+        # Normalize account_id to int for consistent matching
+        account_id = acc.get('id') or acc.get('account_id')
+        try:
+            account_id = int(account_id)
+        except (ValueError, TypeError):
+            # Skip accounts without valid ID
+            acc['balance'] = 0.0
+            continue
         if account_id in account_balances:
             category = acc.get('account_type', {}).get('category', '')
             debit_total = account_balances[account_id]['debit_total']
