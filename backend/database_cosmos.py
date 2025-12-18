@@ -455,6 +455,7 @@ def get_profit_loss_accounts(
     
     # Get transactions in date range
     transactions = get_transactions(business_id, start_date, end_date)
+    print(f"DEBUG get_profit_loss_accounts: Found {len(transactions)} transactions for business_id={business_id}, start_date={start_date}, end_date={end_date}", flush=True)
     
     # Aggregate balances from transaction lines
     account_balances = {}
@@ -467,16 +468,21 @@ def get_profit_loss_accounts(
                     account_id = int(account_id)
                 except (ValueError, TypeError):
                     # If it's not a number, skip this line
+                    print(f"DEBUG get_profit_loss_accounts: Skipping line with invalid chart_of_account_id: {line.get('chart_of_account_id')}", flush=True)
                     continue
                 if account_id not in account_balances:
                     account_balances[account_id] = {
                         'debit_total': 0.0,
                         'credit_total': 0.0
                     }
-                account_balances[account_id]['debit_total'] += float(line.get('debit_amount', 0))
-                account_balances[account_id]['credit_total'] += float(line.get('credit_amount', 0))
+                debit_amt = float(line.get('debit_amount', 0))
+                credit_amt = float(line.get('credit_amount', 0))
+                account_balances[account_id]['debit_total'] += debit_amt
+                account_balances[account_id]['credit_total'] += credit_amt
+    print(f"DEBUG get_profit_loss_accounts: Account balances: {account_balances}", flush=True)
     
     # Calculate balances and attach to accounts
+    print(f"DEBUG get_profit_loss_accounts: Processing {len(revenue_expense_accounts)} revenue/expense accounts", flush=True)
     for acc in revenue_expense_accounts:
         # Normalize account_id to int for consistent matching
         account_id = acc.get('id') or acc.get('account_id')
@@ -484,6 +490,7 @@ def get_profit_loss_accounts(
             account_id = int(account_id)
         except (ValueError, TypeError):
             # Skip accounts without valid ID
+            print(f"DEBUG get_profit_loss_accounts: Skipping account {acc.get('account_code')} with invalid ID: {acc.get('id')}", flush=True)
             acc['balance'] = 0.0
             continue
         if account_id in account_balances:
@@ -497,8 +504,10 @@ def get_profit_loss_accounts(
                 balance = debit_total - credit_total
             
             acc['balance'] = balance
+            print(f"DEBUG get_profit_loss_accounts: Account {acc.get('account_code')} (id={account_id}) balance={balance} (debit={debit_total}, credit={credit_total})", flush=True)
         else:
             acc['balance'] = 0.0
+            print(f"DEBUG get_profit_loss_accounts: Account {acc.get('account_code')} (id={account_id}) has no matching transactions", flush=True)
     
     # Filter out zero balances
     return [acc for acc in revenue_expense_accounts if abs(acc.get('balance', 0)) >= 0.01]
