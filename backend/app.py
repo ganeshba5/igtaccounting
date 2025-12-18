@@ -342,24 +342,25 @@ def create_business():
     if USE_COSMOS_DB:
         try:
             # Get next business_id
+            # Note: cosmos_get_businesses() returns objects with 'id' field (aliased from business_id)
             businesses = cosmos_get_businesses()
-            # Handle both 'business_id' and 'id' fields (id might be business_id or 'business-X' format)
             business_ids = []
             for b in businesses:
-                bid = b.get('business_id')
-                if bid is None:
-                    # Try to extract from id field
-                    id_val = b.get('id', '')
-                    if isinstance(id_val, str) and id_val.startswith('business-'):
-                        try:
-                            bid = int(id_val.replace('business-', ''))
-                        except (ValueError, TypeError):
-                            continue
-                    elif isinstance(id_val, (int, float)):
-                        bid = int(id_val)
-                    else:
+                # get_businesses() returns 'business_id as id', so check 'id' first, then 'business_id' as fallback
+                bid = b.get('id') or b.get('business_id')
+                if bid is not None:
+                    try:
+                        # Convert to int if it's a string like "business-1" or already an int
+                        if isinstance(bid, str):
+                            if bid.startswith('business-'):
+                                bid = int(bid.replace('business-', ''))
+                            else:
+                                bid = int(bid)
+                        else:
+                            bid = int(bid)
+                        business_ids.append(bid)
+                    except (ValueError, TypeError):
                         continue
-                business_ids.append(bid)
             
             next_id = max(business_ids, default=0) + 1
             
