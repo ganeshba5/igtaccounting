@@ -2712,6 +2712,20 @@ def import_transactions_csv(business_id):
                     # Normalize header to standard names
                     normalized_header = normalized_row_aliases
                     break
+                
+                # Check if this row matches Format 3 (case-insensitive)
+                normalized_format3 = [col.strip().lower() for col in format3_columns]
+                if all(col in normalized_row_lower for col in normalized_format3):
+                    header_row_idx = idx
+                    header_row = normalized_row
+                    # For format3, normalize Date to Posting Date for consistency
+                    normalized_header = []
+                    for col in normalized_row:
+                        if col.lower() == 'date':
+                            normalized_header.append('Posting Date')
+                        else:
+                            normalized_header.append(col)
+                    break
             except Exception:
                 # Not a valid CSV row, continue
                 continue
