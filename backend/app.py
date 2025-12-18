@@ -340,26 +340,50 @@ def create_business():
         return jsonify({'error': 'Business name is required'}), 400
     
     if USE_COSMOS_DB:
-        # Get next business_id
-        businesses = cosmos_get_businesses()
-        next_id = max([b.get('business_id', 0) for b in businesses if b.get('business_id')], default=0) + 1
-        
-        business_doc = {
-            'id': f'business-{next_id}',
-            'type': 'business',
-            'business_id': next_id,
-            'name': name,
-            'created_at': datetime.utcnow().isoformat(),
-            'updated_at': datetime.utcnow().isoformat()
-        }
-        
-        created = create_item('businesses', business_doc, partition_key=str(next_id))
-        return jsonify({
-            'id': created['business_id'],
-            'name': created['name'],
-            'created_at': created['created_at'],
-            'updated_at': created['updated_at']
-        }), 201
+        try:
+            # Get next business_id
+            businesses = cosmos_get_businesses()
+            # Handle both 'business_id' and 'id' fields (id might be business_id or 'business-X' format)
+            business_ids = []
+            for b in businesses:
+                bid = b.get('business_id')
+                if bid is None:
+                    # Try to extract from id field
+                    id_val = b.get('id', '')
+                    if isinstance(id_val, str) and id_val.startswith('business-'):
+                        try:
+                            bid = int(id_val.replace('business-', ''))
+                        except (ValueError, TypeError):
+                            continue
+                    elif isinstance(id_val, (int, float)):
+                        bid = int(id_val)
+                    else:
+                        continue
+                business_ids.append(bid)
+            
+            next_id = max(business_ids, default=0) + 1
+            
+            business_doc = {
+                'id': f'business-{next_id}',
+                'type': 'business',
+                'business_id': next_id,
+                'name': name,
+                'created_at': datetime.utcnow().isoformat(),
+                'updated_at': datetime.utcnow().isoformat()
+            }
+            
+            created = create_item('businesses', business_doc, partition_key=str(next_id))
+            return jsonify({
+                'id': created.get('business_id') or created.get('id'),
+                'name': created['name'],
+                'created_at': created['created_at'],
+                'updated_at': created['updated_at']
+            }), 201
+        except Exception as e:
+            print(f"Error creating business: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': f'Error creating business: {str(e)}'}), 500
     else:
         conn = get_db_connection()
         cursor = conn.cursor()
