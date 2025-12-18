@@ -2583,10 +2583,13 @@ def delete_transaction_type_mapping(mapping_id):
 @require_user_access
 def import_transactions_csv(business_id):
     """Import transactions from CSV file."""
+    import sys
     try:
-        print(f"DEBUG import_transactions_csv: Received request for business_id={business_id}")
-        print(f"DEBUG import_transactions_csv: Files in request: {list(request.files.keys())}")
-        print(f"DEBUG import_transactions_csv: Form data: {dict(request.form)}")
+        sys.stdout.flush()
+        print(f"DEBUG import_transactions_csv: Received request for business_id={business_id}", flush=True)
+        print(f"DEBUG import_transactions_csv: Files in request: {list(request.files.keys())}", flush=True)
+        print(f"DEBUG import_transactions_csv: Form data: {dict(request.form)}", flush=True)
+        sys.stdout.flush()
         # Check if file is present
         if 'file' not in request.files:
             return jsonify({'error': 'No file uploaded'}), 400
@@ -2740,7 +2743,8 @@ def import_transactions_csv(business_id):
                         f'Format 3 requires: {", ".join(format3_columns)}')
             if lines:
                 error_msg += f'\n\nFirst few lines of CSV:\n' + '\n'.join(lines[:5])
-            print(f"DEBUG import_transactions_csv: {error_msg}")
+            print(f"DEBUG import_transactions_csv: {error_msg}", flush=True)
+            sys.stdout.flush()
             return jsonify({
                 'error': error_msg,
                 'scanned_lines': min(20, len(lines))
@@ -2821,7 +2825,8 @@ def import_transactions_csv(business_id):
                         f'Format 3: {", ".join(format3_columns)}\n\n'
                         f'Found columns: {", ".join(original_fieldnames) if original_fieldnames else "None"}\n'
                         f'Normalized columns: {", ".join(csv_reader.fieldnames) if csv_reader.fieldnames else "None"}')
-            print(f"DEBUG import_transactions_csv: {error_msg}")
+            print(f"DEBUG import_transactions_csv: {error_msg}", flush=True)
+            sys.stdout.flush()
             return jsonify({
                 'error': error_msg,
                 'found_columns': list(original_fieldnames) if original_fieldnames else [],
@@ -3323,9 +3328,12 @@ def import_transactions_csv(business_id):
                     'errors': errors[:10]  # Limit errors to first 10
                 }), 200
             except Exception as e:
-                print(f"Error in import_transactions_csv (Cosmos DB): {e}")
+                import sys
+                error_str = f"Error in import_transactions_csv (Cosmos DB): {e}"
+                print(error_str, flush=True)
                 import traceback
                 traceback.print_exc()
+                sys.stdout.flush()
                 return jsonify({'error': f'Error processing CSV: {str(e)}'}), 400
         
         conn = get_db_connection()
