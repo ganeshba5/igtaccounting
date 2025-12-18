@@ -2834,20 +2834,20 @@ def import_transactions_csv(business_id):
             if all(col in csv_reader.fieldnames for col in format3_normalized):
                 csv_format = 'format3'  # Format with separate Credit and Debit columns
             else:
-            error_msg = (f'CSV format not recognized after normalization. Required columns:\n'
-                        f'Format 1: {", ".join(format1_columns)}\n'
-                        f'Format 2: {", ".join(format2_columns)} (or aliases: Date, Running Bal.)\n'
-                        f'Format 3: {", ".join(format3_columns)}\n\n'
-                        f'Found columns: {", ".join(original_fieldnames) if original_fieldnames else "None"}\n'
-                        f'Normalized columns: {", ".join(csv_reader.fieldnames) if csv_reader.fieldnames else "None"}')
-            print(f"DEBUG import_transactions_csv: {error_msg}", flush=True)
-            sys.stdout.flush()
-            return jsonify({
-                'error': error_msg,
-                'found_columns': list(original_fieldnames) if original_fieldnames else [],
-                'normalized_columns': list(csv_reader.fieldnames) if csv_reader.fieldnames else [],
-                'header_row_index': header_row_idx + 1
-            }), 400
+                error_msg = (f'CSV format not recognized after normalization. Required columns:\n'
+                            f'Format 1: {", ".join(format1_columns)}\n'
+                            f'Format 2: {", ".join(format2_columns)} (or aliases: Date, Running Bal.)\n'
+                            f'Format 3: {", ".join(format3_columns)}\n\n'
+                            f'Found columns: {", ".join(original_fieldnames) if original_fieldnames else "None"}\n'
+                            f'Normalized columns: {", ".join(csv_reader.fieldnames) if csv_reader.fieldnames else "None"}')
+                print(f"DEBUG import_transactions_csv: {error_msg}", flush=True)
+                sys.stdout.flush()
+                return jsonify({
+                    'error': error_msg,
+                    'found_columns': list(original_fieldnames) if original_fieldnames else [],
+                    'normalized_columns': list(csv_reader.fieldnames) if csv_reader.fieldnames else [],
+                    'header_row_index': header_row_idx + 1
+                }), 400
         
         print(f"Detected CSV format: {csv_format}, header found at line {header_row_idx + 1}, skipped {header_row_idx} lines")
         
