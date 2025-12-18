@@ -2828,6 +2828,12 @@ def import_transactions_csv(business_id):
         elif all(col in csv_reader.fieldnames for col in format3_columns):
             csv_format = 'format3'  # Format with separate Credit and Debit columns
         else:
+            # Check for Format 3 with normalized Date -> Posting Date
+            # Format 3 columns after normalization: Posting Date, Description, Credit, Debit, Balance
+            format3_normalized = ['Posting Date', 'Description', 'Credit', 'Debit', 'Balance']
+            if all(col in csv_reader.fieldnames for col in format3_normalized):
+                csv_format = 'format3'  # Format with separate Credit and Debit columns
+            else:
             error_msg = (f'CSV format not recognized after normalization. Required columns:\n'
                         f'Format 1: {", ".join(format1_columns)}\n'
                         f'Format 2: {", ".join(format2_columns)} (or aliases: Date, Running Bal.)\n'
