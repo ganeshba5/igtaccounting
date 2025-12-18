@@ -15,6 +15,7 @@ function ImportTransactions() {
   const [loading, setLoading] = useState(false)
   const [importResult, setImportResult] = useState(null)
   const [previewData, setPreviewData] = useState(null)
+  const [errorMessage, setErrorMessage] = useState(null)
 
   useEffect(() => {
     loadBusinesses()
@@ -197,6 +198,7 @@ function ImportTransactions() {
         // Reset file input
         setFile(null)
         setPreviewData(null)
+        setErrorMessage(null)
         const fileInput = document.querySelector('input[type="file"]')
         if (fileInput) fileInput.value = ''
       }
@@ -205,23 +207,25 @@ function ImportTransactions() {
       console.error('Error response:', error.response)
       console.error('Error data:', error.response?.data)
       
-      let errorMessage = 'Unknown error occurred'
+      let errorMsg = 'Unknown error occurred'
       if (error.response?.data) {
         // Try different possible error message formats
         if (typeof error.response.data === 'string') {
-          errorMessage = error.response.data
+          errorMsg = error.response.data
         } else if (error.response.data.error) {
-          errorMessage = error.response.data.error
+          errorMsg = error.response.data.error
         } else if (error.response.data.message) {
-          errorMessage = error.response.data.message
+          errorMsg = error.response.data.message
         } else {
-          errorMessage = JSON.stringify(error.response.data)
+          errorMsg = JSON.stringify(error.response.data)
         }
       } else if (error.message) {
-        errorMessage = error.message
+        errorMsg = error.message
       }
       
-      alert('Error importing CSV: ' + errorMessage)
+      setErrorMessage(errorMsg)
+      // Also show alert for immediate feedback
+      alert('Error importing CSV: ' + errorMsg)
     } finally {
       setLoading(false)
     }
@@ -359,6 +363,66 @@ function ImportTransactions() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+
+              {errorMessage && (
+                <div style={{ 
+                  marginTop: '20px', 
+                  padding: '15px', 
+                  background: '#f8d7da',
+                  borderRadius: '4px',
+                  border: '1px solid #f5c6cb'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <h3 style={{ margin: 0, color: '#721c24' }}>Import Error</h3>
+                    <button 
+                      onClick={() => setErrorMessage(null)}
+                      style={{ 
+                        background: 'none', 
+                        border: 'none', 
+                        fontSize: '20px', 
+                        cursor: 'pointer',
+                        color: '#721c24'
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div style={{ 
+                    background: 'white', 
+                    padding: '10px', 
+                    borderRadius: '4px',
+                    border: '1px solid #ddd',
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    maxHeight: '300px',
+                    overflow: 'auto'
+                  }}>
+                    {errorMessage}
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(errorMessage).then(() => {
+                        alert('Error message copied to clipboard!')
+                      }).catch(() => {
+                        alert('Failed to copy to clipboard. Please select and copy the text manually.')
+                      })
+                    }}
+                    style={{
+                      marginTop: '10px',
+                      padding: '5px 10px',
+                      background: '#6c757d',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Copy Error Message
+                  </button>
                 </div>
               )}
 
