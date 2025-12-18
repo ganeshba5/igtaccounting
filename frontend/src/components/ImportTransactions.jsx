@@ -314,6 +314,7 @@ function ImportTransactions() {
                   <br />Format 1: Details, Posting Date, Description, Amount, Type, Balance, Check or Slip #
                   <br />Format 2: Posting Date, Description, Amount, Balance (Amount sign: -ve = Debit, +ve = Credit)
                   <br />Format 2 (alias): Date, Description, Amount, Running Bal. (same as Format 2)
+                  <br />Format 3: Date, Description, Credit, Debit, Balance
                   <br />Note: The system will automatically skip lines until it finds the header row.
                 </small>
               </div>

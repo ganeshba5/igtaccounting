@@ -2605,6 +2605,7 @@ def import_transactions_csv(business_id):
         # Define format patterns and column aliases
         format1_columns = ['Details', 'Posting Date', 'Description', 'Amount', 'Type', 'Balance', 'Check or Slip #']
         format2_columns = ['Posting Date', 'Description', 'Amount', 'Balance']
+        format3_columns = ['Date', 'Description', 'Credit', 'Debit', 'Balance']
         format2_aliases = {
             'Date': 'Posting Date',
             'Running Bal.': 'Balance',
@@ -2692,7 +2693,8 @@ def import_transactions_csv(business_id):
             return jsonify({
                 'error': f'CSV format not recognized. Could not find header row in first 20 lines.\n'
                         f'Format 1 requires: {", ".join(format1_columns)}\n'
-                        f'Format 2 requires: {", ".join(format2_columns)} (or aliases: Date, Running Bal.)',
+                        f'Format 2 requires: {", ".join(format2_columns)} (or aliases: Date, Running Bal.)\n'
+                        f'Format 3 requires: {", ".join(format3_columns)}',
                 'scanned_lines': min(20, len(lines))
             }), 400
         
@@ -2762,11 +2764,14 @@ def import_transactions_csv(business_id):
             csv_format = 'format1'  # Original format with Type field
         elif all(col in csv_reader.fieldnames for col in format2_columns):
             csv_format = 'format2'  # New format: Amount sign determines debit/credit
+        elif all(col in csv_reader.fieldnames for col in format3_columns):
+            csv_format = 'format3'  # Format with separate Credit and Debit columns
         else:
             return jsonify({
                 'error': f'CSV format not recognized after normalization. Required columns:\n'
                         f'Format 1: {", ".join(format1_columns)}\n'
-                        f'Format 2: {", ".join(format2_columns)} (or aliases: Date, Running Bal.)',
+                        f'Format 2: {", ".join(format2_columns)} (or aliases: Date, Running Bal.)\n'
+                        f'Format 3: {", ".join(format3_columns)}',
                 'found_columns': original_fieldnames,
                 'normalized_columns': csv_reader.fieldnames,
                 'header_row_index': header_row_idx + 1
@@ -3000,33 +3005,67 @@ def import_transactions_csv(business_id):
                 for row_idx, row in enumerate(csv_reader, start=header_row_idx + 2):
                     try:
                         # Parse CSV row
-                        posting_date_str = (row.get('Posting Date') or '').strip()
+                        posting_date_str = (row.get('Posting Date') or row.get('Date') or '').strip()
                         if not posting_date_str:
-                            errors.append(f'Row {row_idx}: Missing Posting Date')
+                            errors.append(f'Row {row_idx}: Missing Date/Posting Date')
                             skipped_count += 1
                             continue
                         
                         description = (row.get('Description') or '').strip() or (row.get('Details') or '').strip()
                         
-                        amount_value = row.get('Amount') or row.get('amount') or ''
-                        if not amount_value:
-                            errors.append(f'Row {row_idx}: Missing Amount')
-                            skipped_count += 1
-                            continue
-                        
-                        amount_str = str(amount_value).strip().replace(',', '').replace('$', '')
-                        
-                        # Parse amount
-                        try:
-                            amount = float(amount_str)
-                        except ValueError:
-                            errors.append(f'Row {row_idx}: Invalid amount: {amount_str}')
-                            skipped_count += 1
-                            continue
-                        
                         # Determine transaction direction and type based on CSV format
-                        if csv_format == 'format2':
+                        if csv_format == 'format3':
+                            # Format 3: Separate Credit and Debit columns
+                            credit_value = row.get('Credit') or row.get('credit') or ''
+                            debit_value = row.get('Debit') or row.get('debit') or ''
+                            
+                            credit_str = str(credit_value).strip().replace(',', '').replace('$', '') if credit_value else '0'
+                            debit_str = str(debit_value).strip().replace(',', '').replace('$', '') if debit_value else '0'
+                            
+                            # Parse credit and debit amounts
+                            try:
+                                credit_amount = float(credit_str) if credit_str else 0.0
+                                debit_amount = float(debit_str) if debit_str else 0.0
+                            except ValueError:
+                                errors.append(f'Row {row_idx}: Invalid credit/debit amounts: Credit={credit_str}, Debit={debit_str}')
+                                skipped_count += 1
+                                continue
+                            
+                            # Determine direction based on which column has a value
+                            if credit_amount > 0 and debit_amount == 0:
+                                direction = 'CREDIT'
+                                internal_type = 'DEPOSIT'
+                                amount = credit_amount
+                            elif debit_amount > 0 and credit_amount == 0:
+                                direction = 'DEBIT'
+                                internal_type = 'WITHDRAWAL'
+                                amount = debit_amount
+                            elif credit_amount == 0 and debit_amount == 0:
+                                skipped_count += 1
+                                continue
+                            else:
+                                errors.append(f'Row {row_idx}: Both Credit and Debit have values. Only one should have a value.')
+                                skipped_count += 1
+                                continue
+                            check_number = None
+                        elif csv_format == 'format2':
                             # Format 2: Amount sign determines debit/credit
+                            amount_value = row.get('Amount') or row.get('amount') or ''
+                            if not amount_value:
+                                errors.append(f'Row {row_idx}: Missing Amount')
+                                skipped_count += 1
+                                continue
+                            
+                            amount_str = str(amount_value).strip().replace(',', '').replace('$', '')
+                            
+                            # Parse amount
+                            try:
+                                amount = float(amount_str)
+                            except ValueError:
+                                errors.append(f'Row {row_idx}: Invalid amount: {amount_str}')
+                                skipped_count += 1
+                                continue
+                            
                             if amount < 0:
                                 direction = 'DEBIT'
                                 internal_type = 'WITHDRAWAL'
@@ -3040,6 +3079,22 @@ def import_transactions_csv(business_id):
                             check_number = None
                         else:
                             # Format 1: Use Type field to determine direction
+                            amount_value = row.get('Amount') or row.get('amount') or ''
+                            if not amount_value:
+                                errors.append(f'Row {row_idx}: Missing Amount')
+                                skipped_count += 1
+                                continue
+                            
+                            amount_str = str(amount_value).strip().replace(',', '').replace('$', '')
+                            
+                            # Parse amount
+                            try:
+                                amount = float(amount_str)
+                            except ValueError:
+                                errors.append(f'Row {row_idx}: Invalid amount: {amount_str}')
+                                skipped_count += 1
+                                continue
+                            
                             csv_transaction_type = (row.get('Type') or '').strip()
                             check_number = (row.get('Check or Slip #') or '').strip()
                             amount = abs(amount)
@@ -3436,9 +3491,9 @@ def import_transactions_csv(business_id):
                     print(f"Row {row_idx} raw data: {dict(row)}")
                 
                 # Parse CSV row
-                posting_date_str = (row.get('Posting Date') or '').strip()
+                posting_date_str = (row.get('Posting Date') or row.get('Date') or '').strip()
                 if not posting_date_str:
-                    errors.append(f'Row {row_idx}: Missing Posting Date')
+                    errors.append(f'Row {row_idx}: Missing Date/Posting Date')
                     skipped_count += 1
                     continue
                     
@@ -3448,26 +3503,60 @@ def import_transactions_csv(business_id):
                 if row_idx <= 5 and ',' in description:
                     print(f"Row {row_idx} description with comma preserved: {description}")
                 
-                amount_value = row.get('Amount') or row.get('amount') or ''
-                if not amount_value:
-                    errors.append(f'Row {row_idx}: Missing Amount')
-                    skipped_count += 1
-                    continue
-                
-                amount_str = str(amount_value).strip().replace(',', '').replace('$', '')
-                
-                # Parse amount
-                try:
-                    amount = float(amount_str)
-                except ValueError:
-                    errors.append(f'Row {row_idx}: Invalid amount: {amount_str}')
-                    skipped_count += 1
-                    continue
-                
                 # Determine transaction direction and type based on CSV format
-                if csv_format == 'format2':
+                if csv_format == 'format3':
+                    # Format 3: Separate Credit and Debit columns
+                    credit_value = row.get('Credit') or row.get('credit') or ''
+                    debit_value = row.get('Debit') or row.get('debit') or ''
+                    
+                    credit_str = str(credit_value).strip().replace(',', '').replace('$', '') if credit_value else '0'
+                    debit_str = str(debit_value).strip().replace(',', '').replace('$', '') if debit_value else '0'
+                    
+                    # Parse credit and debit amounts
+                    try:
+                        credit_amount = float(credit_str) if credit_str else 0.0
+                        debit_amount = float(debit_str) if debit_str else 0.0
+                    except ValueError:
+                        errors.append(f'Row {row_idx}: Invalid credit/debit amounts: Credit={credit_str}, Debit={debit_str}')
+                        skipped_count += 1
+                        continue
+                    
+                    # Determine direction based on which column has a value
+                    if credit_amount > 0 and debit_amount == 0:
+                        direction = 'CREDIT'
+                        internal_type = 'DEPOSIT'
+                        amount = credit_amount
+                    elif debit_amount > 0 and credit_amount == 0:
+                        direction = 'DEBIT'
+                        internal_type = 'WITHDRAWAL'
+                        amount = debit_amount
+                    elif credit_amount == 0 and debit_amount == 0:
+                        skipped_count += 1
+                        continue
+                    else:
+                        errors.append(f'Row {row_idx}: Both Credit and Debit have values. Only one should have a value.')
+                        skipped_count += 1
+                        continue
+                    check_number = None
+                elif csv_format == 'format2':
                     # Format 2: Amount sign determines debit/credit
                     # Negative amount = Debit, Positive amount = Credit
+                    amount_value = row.get('Amount') or row.get('amount') or ''
+                    if not amount_value:
+                        errors.append(f'Row {row_idx}: Missing Amount')
+                        skipped_count += 1
+                        continue
+                    
+                    amount_str = str(amount_value).strip().replace(',', '').replace('$', '')
+                    
+                    # Parse amount
+                    try:
+                        amount = float(amount_str)
+                    except ValueError:
+                        errors.append(f'Row {row_idx}: Invalid amount: {amount_str}')
+                        skipped_count += 1
+                        continue
+                    
                     if amount < 0:
                         direction = 'DEBIT'
                         internal_type = 'WITHDRAWAL'
@@ -3482,6 +3571,22 @@ def import_transactions_csv(business_id):
                     check_number = None  # Not available in format2
                 else:
                     # Format 1: Use Type field to determine direction
+                    amount_value = row.get('Amount') or row.get('amount') or ''
+                    if not amount_value:
+                        errors.append(f'Row {row_idx}: Missing Amount')
+                        skipped_count += 1
+                        continue
+                    
+                    amount_str = str(amount_value).strip().replace(',', '').replace('$', '')
+                    
+                    # Parse amount
+                    try:
+                        amount = float(amount_str)
+                    except ValueError:
+                        errors.append(f'Row {row_idx}: Invalid amount: {amount_str}')
+                        skipped_count += 1
+                        continue
+                    
                     csv_transaction_type = (row.get('Type') or '').strip()
                     check_number = (row.get('Check or Slip #') or '').strip()
                     amount = abs(amount)  # Always use positive amount
