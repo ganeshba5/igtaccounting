@@ -2588,23 +2588,32 @@ def import_transactions_csv(business_id):
         sys.stdout.flush()
         print(f"DEBUG import_transactions_csv: Received request for business_id={business_id}", flush=True)
         print(f"DEBUG import_transactions_csv: Files in request: {list(request.files.keys())}", flush=True)
-        print(f"DEBUG import_transactions_csv: Form data: {dict(request.form)}", flush=True)
+        print(f"DEBUG import_transactions_csv: Form data keys: {list(request.form.keys())}", flush=True)
+        print(f"DEBUG import_transactions_csv: Form data values: {[(k, request.form.get(k)) for k in request.form.keys()]}", flush=True)
         sys.stdout.flush()
         # Check if file is present
         if 'file' not in request.files:
-            return jsonify({'error': 'No file uploaded'}), 400
+            error_msg = 'No file uploaded'
+            print(f"DEBUG import_transactions_csv: {error_msg}", flush=True)
+            return jsonify({'error': error_msg}), 400
         
         file = request.files['file']
         if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+            error_msg = 'No file selected'
+            print(f"DEBUG import_transactions_csv: {error_msg}", flush=True)
+            return jsonify({'error': error_msg}), 400
         
         # Get additional parameters
         bank_account_id = request.form.get('bank_account_id')
         expense_account_id = request.form.get('expense_account_id')
         revenue_account_id = request.form.get('revenue_account_id')
         
+        print(f"DEBUG import_transactions_csv: bank_account_id={bank_account_id}, expense_account_id={expense_account_id}, revenue_account_id={revenue_account_id}", flush=True)
+        
         if not bank_account_id:
-            return jsonify({'error': 'Bank account is required'}), 400
+            error_msg = 'Bank account is required'
+            print(f"DEBUG import_transactions_csv: {error_msg}", flush=True)
+            return jsonify({'error': error_msg}), 400
         
         # Read and parse CSV
         # Use proper CSV dialect to handle quoted fields with embedded commas
@@ -3332,9 +3341,18 @@ def import_transactions_csv(business_id):
                 error_str = f"Error in import_transactions_csv (Cosmos DB): {e}"
                 print(error_str, flush=True)
                 import traceback
-                traceback.print_exc()
+                traceback.print_exc(file=sys.stdout)
                 sys.stdout.flush()
                 return jsonify({'error': f'Error processing CSV: {str(e)}'}), 400
+    except Exception as e:
+        # Top-level exception handler for any unexpected errors
+        import sys
+        import traceback
+        error_str = f"Unexpected error in import_transactions_csv: {e}"
+        print(error_str, flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+        return jsonify({'error': f'Unexpected error importing CSV: {str(e)}'}), 500
         
         conn = get_db_connection()
         
