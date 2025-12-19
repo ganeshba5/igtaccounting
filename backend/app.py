@@ -1090,8 +1090,13 @@ def delete_chart_of_account(business_id, account_id):
             print(f"DEBUG delete_chart_of_account: Account document _rid: {account.get('_rid')}", flush=True)
             
             # Use the account document's business_id for partition key to ensure it matches
-            partition_key_value = str(account.get('business_id') or business_id)
-            print(f"DEBUG delete_chart_of_account: Using partition_key: {partition_key_value} (from account document: {account.get('business_id')})", flush=True)
+            # Try both string and integer formats since Cosmos DB might store it differently
+            business_id_from_doc = account.get('business_id') or business_id
+            partition_key_str = str(business_id_from_doc)
+            partition_key_int = int(business_id_from_doc) if isinstance(business_id_from_doc, (int, str)) and str(business_id_from_doc).isdigit() else business_id_from_doc
+            
+            print(f"DEBUG delete_chart_of_account: Account document business_id type: {type(business_id_from_doc)}, value: {business_id_from_doc}", flush=True)
+            print(f"DEBUG delete_chart_of_account: Will try partition_key as string: '{partition_key_str}' and as int: {partition_key_int}", flush=True)
             
             # Try deleting using the document object directly
             # The Cosmos DB SDK should extract the ID from the document object
@@ -1102,28 +1107,50 @@ def delete_chart_of_account(business_id, account_id):
             deleted = False
             last_error = None
             
-            # Method 1: Use document object directly (preferred - SDK handles ID extraction)
+            # Method 1: Use document object with string partition key
             try:
-                print(f"DEBUG delete_chart_of_account: Attempting delete using document object directly", flush=True)
-                container.delete_item(item=account, partition_key=partition_key_value)
-                print(f"DEBUG delete_chart_of_account: Successfully deleted using document object", flush=True)
+                print(f"DEBUG delete_chart_of_account: Attempting delete using document object with string partition key", flush=True)
+                container.delete_item(item=account, partition_key=partition_key_str)
+                print(f"DEBUG delete_chart_of_account: Successfully deleted using document object with string partition key", flush=True)
                 deleted = True
             except Exception as e1:
                 last_error = e1
-                print(f"WARNING delete_chart_of_account: Delete with document object failed: {e1}", flush=True)
+                print(f"WARNING delete_chart_of_account: Delete with document object (string PK) failed: {e1}", flush=True)
             
-            # Method 2: If document object fails, try with just the ID string
+            # Method 2: Use document object with integer partition key
             if not deleted:
                 try:
-                    print(f"DEBUG delete_chart_of_account: Attempting delete using ID string: {account_doc_id}", flush=True)
-                    container.delete_item(item=account_doc_id, partition_key=partition_key_value)
-                    print(f"DEBUG delete_chart_of_account: Successfully deleted using ID string", flush=True)
+                    print(f"DEBUG delete_chart_of_account: Attempting delete using document object with integer partition key", flush=True)
+                    container.delete_item(item=account, partition_key=partition_key_int)
+                    print(f"DEBUG delete_chart_of_account: Successfully deleted using document object with integer partition key", flush=True)
                     deleted = True
                 except Exception as e2:
                     last_error = e2
-                    print(f"ERROR delete_chart_of_account: Delete with ID string also failed: {e2}", flush=True)
+                    print(f"WARNING delete_chart_of_account: Delete with document object (int PK) failed: {e2}", flush=True)
             
-            # If both methods failed, raise the last error
+            # Method 3: Use ID string with string partition key
+            if not deleted:
+                try:
+                    print(f"DEBUG delete_chart_of_account: Attempting delete using ID string with string partition key: {account_doc_id}", flush=True)
+                    container.delete_item(item=account_doc_id, partition_key=partition_key_str)
+                    print(f"DEBUG delete_chart_of_account: Successfully deleted using ID string with string partition key", flush=True)
+                    deleted = True
+                except Exception as e3:
+                    last_error = e3
+                    print(f"WARNING delete_chart_of_account: Delete with ID string (string PK) failed: {e3}", flush=True)
+            
+            # Method 4: Use ID string with integer partition key
+            if not deleted:
+                try:
+                    print(f"DEBUG delete_chart_of_account: Attempting delete using ID string with integer partition key: {account_doc_id}", flush=True)
+                    container.delete_item(item=account_doc_id, partition_key=partition_key_int)
+                    print(f"DEBUG delete_chart_of_account: Successfully deleted using ID string with integer partition key", flush=True)
+                    deleted = True
+                except Exception as e4:
+                    last_error = e4
+                    print(f"ERROR delete_chart_of_account: Delete with ID string (int PK) also failed: {e4}", flush=True)
+            
+            # If all methods failed, raise the last error
             if not deleted:
                 raise last_error
             
