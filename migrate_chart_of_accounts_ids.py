@@ -129,21 +129,21 @@ def migrate_chart_of_accounts_ids():
             container.create_item(body=new_doc, partition_key=partition_key)
             print(f"✓ Created new document with UUID: {new_id} (was {old_id})")
             
-            # Delete old document - use direct container call with proper partition key type
-            # Match the pattern from backend/app.py delete_chart_of_account
+            # Delete old document - use positional arguments (SDK version compatibility)
+            # Try with integer partition key first (matches document field type)
             try:
-                # Try with integer partition key first (matches document field type)
-                container.delete_item(item=old_id, partition_key=partition_key)
+                container.delete_item(old_id, partition_key)
                 print(f"✓ Deleted old document: {old_id} (using int partition key)")
             except Exception as del_err:
                 # If integer fails, try string partition key
-                print(f"WARNING: Delete with int partition key failed: {del_err}, trying string...")
+                error_msg = str(del_err)
+                print(f"WARNING: Delete with int partition key failed: {error_msg}, trying string...")
                 try:
-                    container.delete_item(item=old_id, partition_key=str(partition_key))
+                    container.delete_item(old_id, str(partition_key))
                     print(f"✓ Deleted old document: {old_id} (using string partition key)")
                 except Exception as del_err2:
-                    # If both fail, raise the error
-                    raise del_err2
+                    # If both fail, raise the error with more context
+                    raise Exception(f"Failed to delete document {old_id} with both int and string partition keys. Last error: {del_err2}")
             
             migrated_count += 1
             
