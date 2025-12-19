@@ -860,8 +860,10 @@ def update_chart_of_account(business_id, account_id):
             if 'account_type_id' in data:
                 account['account_type_id'] = data['account_type_id'] if data['account_type_id'] else None
                 # Update account type info if provided - use same pattern as create_chart_of_account
+                print(f"DEBUG update_chart_of_account: Updating account_type_id to {data['account_type_id']}", flush=True)
                 if data['account_type_id']:
                     account_type_id_int = int(data['account_type_id']) if data['account_type_id'] else None
+                    print(f"DEBUG update_chart_of_account: Looking for account_type with id={account_type_id_int}", flush=True)
                     # Try querying with id field first
                     account_types = query_items(
                         'account_types',
@@ -869,6 +871,7 @@ def update_chart_of_account(business_id, account_id):
                         [{"name": "@account_type_id", "value": account_type_id_int}],
                         partition_key=None
                     )
+                    print(f"DEBUG update_chart_of_account: Query by id returned {len(account_types) if account_types else 0} results", flush=True)
                     # If not found, try alternative field names
                     if not account_types:
                         account_types = query_items(
@@ -877,11 +880,14 @@ def update_chart_of_account(business_id, account_id):
                             [],
                             partition_key=None
                         )
+                        print(f"DEBUG update_chart_of_account: Query all returned {len(account_types) if account_types else 0} total account_types", flush=True)
                         # Filter by id in Python
                         account_types = [at for at in account_types if at.get('id') == account_type_id_int]
+                        print(f"DEBUG update_chart_of_account: After filtering, found {len(account_types)} matching account_types", flush=True)
                     
                     if account_types:
                         at = account_types[0]
+                        print(f"DEBUG update_chart_of_account: Found account_type: {at}", flush=True)
                         account['account_type'] = {
                             'id': at.get('id'),
                             'code': at.get('code'),
@@ -889,11 +895,13 @@ def update_chart_of_account(business_id, account_id):
                             'category': at.get('category'),
                             'normal_balance': at.get('normal_balance')
                         }
+                        print(f"DEBUG update_chart_of_account: Set account['account_type'] = {account.get('account_type')}", flush=True)
                     else:
                         print(f"WARNING update_chart_of_account: Account type {account_type_id_int} not found", flush=True)
                 else:
                     # If account_type_id is None/empty, remove account_type
                     account['account_type'] = None
+                    print(f"DEBUG update_chart_of_account: Removed account_type (account_type_id is None/empty)", flush=True)
             
             if 'description' in data:
                 account['description'] = data['description'] or ''
@@ -903,8 +911,17 @@ def update_chart_of_account(business_id, account_id):
             
             account['updated_at'] = datetime.utcnow().isoformat()
             
+            # Debug: Log what we're about to update
+            print(f"DEBUG update_chart_of_account: About to update account. ID: {account.get('id')}, account_type_id: {account.get('account_type_id')}, account_type: {account.get('account_type')}", flush=True)
+            
             # Update in Cosmos DB - use integer partition key (same as delete fix)
             updated = update_item('chart_of_accounts', account, partition_key=int(business_id))
+            
+            # Debug: Verify account_type was saved
+            if 'account_type' in updated:
+                print(f"DEBUG update_chart_of_account: account_type successfully saved: {updated.get('account_type')}", flush=True)
+            else:
+                print(f"WARNING update_chart_of_account: account_type was NOT saved in updated document! account_type_id={account.get('account_type_id')}", flush=True)
             
             # Return in expected format
             result = {

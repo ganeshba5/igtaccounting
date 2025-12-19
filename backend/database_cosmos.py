@@ -297,6 +297,12 @@ def update_item(container_name: str, item: Dict[str, Any], partition_key: Option
         lines_debug = [(l.get('chart_of_account_id'), l.get('debit_amount'), l.get('credit_amount')) for l in clean_item.get('lines', [])]
         print(f"DEBUG update_item: About to replace transaction {clean_item.get('id')} with lines: {lines_debug}")
     
+    # Debug: Log account_type for chart_of_accounts
+    if container_name == 'chart_of_accounts' and 'account_type' in clean_item:
+        print(f"DEBUG update_item: About to replace chart_of_account {clean_item.get('id')} with account_type: {clean_item.get('account_type')}", flush=True)
+    elif container_name == 'chart_of_accounts' and 'account_type_id' in clean_item:
+        print(f"DEBUG update_item: chart_of_account {clean_item.get('id')} has account_type_id={clean_item.get('account_type_id')} but no account_type field!", flush=True)
+    
     result = container.replace_item(item=item['id'], body=clean_item)
     
     # Debug: Log what was saved (for transactions)
