@@ -797,17 +797,14 @@ def update_chart_of_account(business_id, account_id):
             if not account:
                 return jsonify({'error': 'Account not found'}), 404
             
-            # Ensure the account document has the correct id field for Cosmos DB
-            # The id should be in format "account-{business_id}-{account_id}" (same as created)
+            # Use the ID from the query result - support both old format (chart-{id}) and new format (account-{business_id}-{id})
+            # Don't try to fix/change existing IDs to maintain compatibility with older data
             if 'id' not in account:
+                # Only construct if truly missing (shouldn't happen, but handle gracefully)
                 account['id'] = f"account-{business_id}-{account_id}"
-                print(f"DEBUG update_chart_of_account: Set missing id to: {account['id']}", flush=True)
-            elif not account['id'].startswith('account-'):
-                # If id exists but is in wrong format, fix it
-                account['id'] = f"account-{business_id}-{account_id}"
-                print(f"DEBUG update_chart_of_account: Fixed id format to: {account['id']}", flush=True)
+                print(f"DEBUG update_chart_of_account: WARNING - Account document missing 'id' field, constructed: {account['id']}", flush=True)
             else:
-                print(f"DEBUG update_chart_of_account: Account document has correct id: {account.get('id')}", flush=True)
+                print(f"DEBUG update_chart_of_account: Using existing account document id: {account.get('id')} (supports both chart-{account_id} and account-{business_id}-{account_id} formats)", flush=True)
             
             # Ensure business_id is set for partition key
             if 'business_id' not in account:
