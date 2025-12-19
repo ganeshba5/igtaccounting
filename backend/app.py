@@ -1037,6 +1037,15 @@ def delete_chart_of_account(business_id, account_id):
             if not account:
                 return jsonify({'error': 'Account not found'}), 404
             
+            # Get the actual document ID from the account document
+            account_doc_id = account.get('id')
+            if not account_doc_id:
+                # Fallback: construct ID if missing (shouldn't happen, but just in case)
+                account_doc_id = f'account-{business_id}-{account_id}'
+                print(f"WARNING delete_chart_of_account: Account document missing 'id' field, using constructed ID: {account_doc_id}", flush=True)
+            else:
+                print(f"DEBUG delete_chart_of_account: Using account document ID: {account_doc_id}", flush=True)
+            
             # Check if account has child accounts
             child_accounts = query_items(
                 'chart_of_accounts',
@@ -1054,9 +1063,8 @@ def delete_chart_of_account(business_id, account_id):
                     'message': f'This account has {len(child_accounts)} child account(s). Please delete or reassign child accounts first.'
                 }), 400
             
-            # Delete the account
-            # Account document ID format: account-{business_id}-{account_id}
-            account_doc_id = f'account-{business_id}-{account_id}'
+            # Delete the account using the actual document ID
+            print(f"DEBUG delete_chart_of_account: Deleting account with document ID: {account_doc_id}, partition_key: {business_id}", flush=True)
             delete_item('chart_of_accounts', account_doc_id, partition_key=str(business_id))
             
             return jsonify({'message': 'Account deleted successfully'}), 200
