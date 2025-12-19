@@ -3155,6 +3155,7 @@ def import_transactions_csv(business_id):
                         next_account_id = max([acc.get('id') or acc.get('account_id', 0) for acc in existing_accounts], default=0) + 1
                         
                         # Create chart of account for this bank
+                        import uuid
                         account_doc = {
                             'id': str(uuid.uuid4()),  # Use UUID for document ID
                             'type': 'chart_of_account',
