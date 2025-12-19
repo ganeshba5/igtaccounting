@@ -616,7 +616,7 @@ def get_transaction(transaction_id: int, business_id: int) -> Optional[Dict[str,
             {"name": "@transaction_id", "value": transaction_id},
             {"name": "@business_id", "value": business_id}
         ],
-        partition_key=str(business_id)
+        partition_key=business_id  # Use integer partition key (same fix as chart_of_accounts)
     )
     if transactions:
         transaction = transactions[0]

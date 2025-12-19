@@ -2035,7 +2035,7 @@ def delete_transaction(business_id, transaction_id):
                             'transactions',
                             'SELECT c.transaction_id, c.id, c.business_id FROM c WHERE c.type = "transaction" AND c.business_id = @business_id',
                             [{"name": "@business_id", "value": business_id}],
-                            partition_key=str(business_id)
+                            partition_key=business_id  # Use integer partition key
                         )
                         print(f"DEBUG delete_transaction: Found {len(all_txns)} total transactions for business {business_id}")
                         if all_txns:
