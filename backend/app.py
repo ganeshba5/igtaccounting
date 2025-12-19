@@ -1024,6 +1024,79 @@ def update_chart_of_account(business_id, account_id):
             conn.close()
             return jsonify({'error': 'Account code already exists for this business'}), 400
 
+@app.route('/api/businesses/<int:business_id>/chart-of-accounts/<int:account_id>', methods=['DELETE'])
+@require_auth
+@require_user_access
+def delete_chart_of_account(business_id, account_id):
+    """Delete an account from the chart of accounts."""
+    if USE_COSMOS_DB:
+        try:
+            # Get the account to verify it exists and belongs to the business
+            account = get_chart_of_account(account_id, business_id)
+            if not account:
+                return jsonify({'error': 'Account not found'}), 404
+            
+            # Check if account has child accounts
+            child_accounts = query_items(
+                'chart_of_accounts',
+                'SELECT * FROM c WHERE c.type = "chart_of_account" AND c.business_id = @business_id AND c.parent_account_id = @account_id',
+                [
+                    {"name": "@business_id", "value": business_id},
+                    {"name": "@account_id", "value": account_id}
+                ],
+                partition_key=str(business_id)
+            )
+            
+            if child_accounts:
+                return jsonify({
+                    'error': 'Cannot delete account with child accounts',
+                    'message': f'This account has {len(child_accounts)} child account(s). Please delete or reassign child accounts first.'
+                }), 400
+            
+            # Delete the account
+            # Account document ID format: account-{business_id}-{account_id}
+            account_doc_id = f'account-{business_id}-{account_id}'
+            delete_item('chart_of_accounts', account_doc_id, partition_key=str(business_id))
+            
+            return jsonify({'message': 'Account deleted successfully'}), 200
+        except Exception as e:
+            print(f"Error deleting chart of account: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': f'Error deleting account: {str(e)}'}), 500
+    else:
+        conn = get_db_connection()
+        
+        # Verify account exists and belongs to business
+        account = conn.execute(
+            'SELECT * FROM chart_of_accounts WHERE id = ? AND business_id = ?',
+            (account_id, business_id)
+        ).fetchone()
+        
+        if not account:
+            conn.close()
+            return jsonify({'error': 'Account not found'}), 404
+        
+        # Check if account has child accounts
+        child_accounts = conn.execute(
+            'SELECT id FROM chart_of_accounts WHERE parent_account_id = ?',
+            (account_id,)
+        ).fetchall()
+        
+        if child_accounts:
+            conn.close()
+            return jsonify({
+                'error': 'Cannot delete account with child accounts',
+                'message': f'This account has {len(child_accounts)} child account(s). Please delete or reassign child accounts first.'
+            }), 400
+        
+        # Delete the account
+        conn.execute('DELETE FROM chart_of_accounts WHERE id = ? AND business_id = ?', (account_id, business_id))
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'message': 'Account deleted successfully'}), 200
+
 @app.route('/api/account-types', methods=['GET'])
 def get_account_types():
     """Get all account types."""
