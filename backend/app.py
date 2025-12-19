@@ -1037,12 +1037,42 @@ def delete_chart_of_account(business_id, account_id):
             if not account:
                 return jsonify({'error': 'Account not found'}), 404
             
+            # Debug: Log the full account document to see its structure
+            print(f"DEBUG delete_chart_of_account: Account document keys: {list(account.keys())}", flush=True)
+            print(f"DEBUG delete_chart_of_account: Account document ID field: {account.get('id')}", flush=True)
+            print(f"DEBUG delete_chart_of_account: Account document account_id field: {account.get('account_id')}", flush=True)
+            
             # Get the actual document ID from the account document
+            # Cosmos DB documents should have an 'id' field that matches the document ID
             account_doc_id = account.get('id')
-            if not account_doc_id:
-                # Fallback: construct ID if missing (shouldn't happen, but just in case)
-                account_doc_id = f'account-{business_id}-{account_id}'
-                print(f"WARNING delete_chart_of_account: Account document missing 'id' field, using constructed ID: {account_doc_id}", flush=True)
+            
+            # If 'id' is missing or doesn't look like a document ID, try to find it
+            if not account_doc_id or not isinstance(account_doc_id, str):
+                # Try alternative: check if there's a different ID field or construct it
+                # Some Cosmos DB queries might return documents without the 'id' field in SELECT *
+                # In that case, we need to query by account_id to get the full document
+                print(f"WARNING delete_chart_of_account: Account document missing 'id' field, querying for full document", flush=True)
+                
+                # Query for the full document including the id field
+                full_accounts = query_items(
+                    'chart_of_accounts',
+                    'SELECT * FROM c WHERE c.type = "chart_of_account" AND c.account_id = @account_id AND c.business_id = @business_id',
+                    [
+                        {"name": "@account_id", "value": account_id},
+                        {"name": "@business_id", "value": business_id}
+                    ],
+                    partition_key=str(business_id)
+                )
+                
+                if full_accounts and len(full_accounts) > 0:
+                    account = full_accounts[0]
+                    account_doc_id = account.get('id')
+                    print(f"DEBUG delete_chart_of_account: Retrieved full document, ID: {account_doc_id}", flush=True)
+                
+                if not account_doc_id:
+                    # Last resort: construct ID
+                    account_doc_id = f'account-{business_id}-{account_id}'
+                    print(f"WARNING delete_chart_of_account: Still missing 'id' field, using constructed ID: {account_doc_id}", flush=True)
             else:
                 print(f"DEBUG delete_chart_of_account: Using account document ID: {account_doc_id}", flush=True)
             
