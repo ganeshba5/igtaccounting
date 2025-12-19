@@ -12,6 +12,7 @@ import Transactions from './components/Transactions'
 import Reports from './components/Reports'
 import ImportTransactions from './components/ImportTransactions'
 import CombinedProfitLoss from './components/CombinedProfitLoss'
+import Hub from './components/Hub'
 
 function AppContent() {
   return (
@@ -72,6 +73,11 @@ function AppContent() {
           <Route path="/reports/combined-profit-loss" element={
             <ProtectedRoute>
               <CombinedProfitLoss />
+            </ProtectedRoute>
+          } />
+          <Route path="/hub" element={
+            <ProtectedRoute>
+              <Hub />
             </ProtectedRoute>
           } />
         </Routes>

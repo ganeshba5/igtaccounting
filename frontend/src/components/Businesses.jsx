@@ -70,7 +70,11 @@ function Businesses() {
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h1>Businesses</h1>
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <Link to="/hub" className="btn btn-primary" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '18px' }}>⚙️</span>
+              <span>Hub</span>
+            </Link>
             <Link to="/reports/combined-profit-loss" className="btn btn-primary" style={{ textDecoration: 'none' }}>
               Combined P&L Report
             </Link>
