@@ -354,13 +354,38 @@ def get_chart_of_accounts(business_id: int) -> List[Dict[str, Any]]:
             c.description,
             c.parent_account_id,
             c.is_active,
-            c.account_type
+            c.account_type,
+            c.account_type_id
         FROM c 
         WHERE c.type = "chart_of_account" AND c.business_id = @business_id
         ''',
         [{"name": "@business_id", "value": business_id}],
         partition_key=str(business_id)
     )
+    
+    # Expand account_type if missing but account_type_id exists
+    for acc in accounts:
+        if not acc.get('account_type') and acc.get('account_type_id'):
+            # Try to fetch account type
+            try:
+                account_types = query_items(
+                    'account_types',
+                    'SELECT c.account_type_id as id, c.code, c.name, c.category, c.normal_balance FROM c WHERE c.type = "account_type" AND c.account_type_id = @account_type_id',
+                    [{"name": "@account_type_id", "value": acc.get('account_type_id')}],
+                    partition_key=None  # Cross-partition query
+                )
+                if account_types:
+                    at = account_types[0]
+                    acc['account_type'] = {
+                        'id': at.get('id'),
+                        'code': at.get('code'),
+                        'name': at.get('name'),
+                        'category': at.get('category'),
+                        'normal_balance': at.get('normal_balance')
+                    }
+            except Exception as e:
+                print(f"Warning: Could not expand account_type for account {acc.get('account_code')}: {e}", flush=True)
+    
     # Sort in Python to avoid composite index requirement
     accounts.sort(key=lambda x: x.get('account_code', ''))
     return accounts
@@ -446,12 +471,22 @@ def get_profit_loss_accounts(
     """
     # Get accounts
     accounts = get_chart_of_accounts(business_id)
+    print(f"DEBUG get_profit_loss_accounts: Found {len(accounts)} total accounts for business_id={business_id}", flush=True)
     
     # Filter to revenue/expense
-    revenue_expense_accounts = [
-        acc for acc in accounts
-        if acc.get('account_type', {}).get('category') in ('REVENUE', 'EXPENSE')
-    ]
+    revenue_expense_accounts = []
+    for acc in accounts:
+        account_type = acc.get('account_type', {})
+        if isinstance(account_type, str):
+            # If account_type is a string (reference), we need to expand it
+            print(f"DEBUG get_profit_loss_accounts: Account {acc.get('account_code')} has account_type as string: {account_type}", flush=True)
+            continue
+        category = account_type.get('category') if isinstance(account_type, dict) else None
+        if category in ('REVENUE', 'EXPENSE'):
+            revenue_expense_accounts.append(acc)
+            print(f"DEBUG get_profit_loss_accounts: Account {acc.get('account_code')} ({acc.get('account_name')}) is {category} with account_id={acc.get('id')}", flush=True)
+    
+    print(f"DEBUG get_profit_loss_accounts: Found {len(revenue_expense_accounts)} revenue/expense accounts", flush=True)
     
     # Get transactions in date range
     transactions = get_transactions(business_id, start_date, end_date)
