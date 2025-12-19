@@ -615,13 +615,17 @@ def create_chart_of_account(business_id):
             # Get account type info if provided - MUST embed for P&L reports to work
             account_type_info = None
             if account_type_id:
-                print(f"DEBUG create_chart_of_account: Attempting to fetch account_type for account_type_id={account_type_id}", flush=True)
+                print(f"DEBUG create_chart_of_account: Attempting to fetch account_type for account_type_id={account_type_id} (type: {type(account_type_id)})", flush=True)
                 try:
+                    # Normalize account_type_id to int for query
+                    account_type_id_int = int(account_type_id) if account_type_id else None
+                    print(f"DEBUG create_chart_of_account: Normalized account_type_id to {account_type_id_int}", flush=True)
+                    
                     # Try querying with account_type_id as the field name
                     account_types = query_items(
                         'account_types',
                         'SELECT * FROM c WHERE c.type = "account_type" AND c.account_type_id = @account_type_id',
-                        [{"name": "@account_type_id", "value": account_type_id}],
+                        [{"name": "@account_type_id", "value": account_type_id_int}],
                         partition_key=None
                     )
                     print(f"DEBUG create_chart_of_account: Query returned {len(account_types) if account_types else 0} account_types", flush=True)
@@ -632,14 +636,34 @@ def create_chart_of_account(business_id):
                         account_types = query_items(
                             'account_types',
                             'SELECT * FROM c WHERE c.type = "account_type" AND c.id = @account_type_id',
-                            [{"name": "@account_type_id", "value": account_type_id}],
+                            [{"name": "@account_type_id", "value": account_type_id_int}],
                             partition_key=None
                         )
                         print(f"DEBUG create_chart_of_account: Alternative query returned {len(account_types) if account_types else 0} account_types", flush=True)
                     
+                    # If still not found, try getting all and filtering
+                    if not account_types or len(account_types) == 0:
+                        print(f"DEBUG create_chart_of_account: Trying to get all account types and filter", flush=True)
+                        all_account_types = query_items(
+                            'account_types',
+                            'SELECT * FROM c WHERE c.type = "account_type"',
+                            [],
+                            partition_key=None
+                        )
+                        print(f"DEBUG create_chart_of_account: Found {len(all_account_types) if all_account_types else 0} total account types", flush=True)
+                        if all_account_types:
+                            for at in all_account_types:
+                                at_id = at.get('account_type_id') or at.get('id')
+                                print(f"DEBUG create_chart_of_account: Checking account_type with id={at_id} (type: {type(at_id)})", flush=True)
+                                if at_id == account_type_id_int or str(at_id) == str(account_type_id):
+                                    account_types = [at]
+                                    print(f"DEBUG create_chart_of_account: Found matching account_type!", flush=True)
+                                    break
+                    
                     if account_types and len(account_types) > 0:
                         at = account_types[0]
                         print(f"DEBUG create_chart_of_account: Account type document keys: {list(at.keys())}", flush=True)
+                        print(f"DEBUG create_chart_of_account: Account type document: {at}", flush=True)
                         account_type_info = {
                             'id': at.get('account_type_id') or at.get('id'),
                             'code': at.get('code'),
@@ -649,7 +673,7 @@ def create_chart_of_account(business_id):
                         }
                         print(f"DEBUG create_chart_of_account: Found account_type for account_type_id={account_type_id}: {account_type_info}", flush=True)
                     else:
-                        print(f"WARNING create_chart_of_account: No account_type found for account_type_id={account_type_id} after trying both queries", flush=True)
+                        print(f"WARNING create_chart_of_account: No account_type found for account_type_id={account_type_id} after trying all queries", flush=True)
                 except Exception as e:
                     print(f"ERROR create_chart_of_account: Failed to fetch account_type for account_type_id={account_type_id}: {e}", flush=True)
                     import traceback
