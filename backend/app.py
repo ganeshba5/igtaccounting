@@ -1058,17 +1058,18 @@ def delete_chart_of_account(business_id, account_id):
                 print(f"DEBUG delete_chart_of_account: Warning - account document missing 'id' field, constructing: {actual_doc_id}", flush=True)
             
             # For chart_of_accounts container, partition key path is /business_id
-            # So the partition key value should be the business_id (as string)
-            partition_key_value = str(business_id)
-            
-            # Ensure business_id from account matches (handle both int and string)
+            # The document shows business_id as an integer (3), so use integer partition key
+            # Use the business_id from the account document to ensure exact match
+            acc_business_id = account.get('business_id')
             if acc_business_id:
-                acc_business_id = int(acc_business_id)
-                if acc_business_id != business_id:
-                    print(f"DEBUG delete_chart_of_account: Business ID mismatch - account has {acc_business_id}, requested {business_id}", flush=True)
-                    return jsonify({'error': 'Account does not belong to this business'}), 403
-                # Use the business_id from the account document to be safe
-                partition_key_value = str(acc_business_id)
+                partition_key_value = int(acc_business_id)
+            else:
+                partition_key_value = business_id
+            
+            # Ensure business_id from account matches
+            if acc_business_id and int(acc_business_id) != business_id:
+                print(f"DEBUG delete_chart_of_account: Business ID mismatch - account has {acc_business_id}, requested {business_id}", flush=True)
+                return jsonify({'error': 'Account does not belong to this business'}), 403
             
             print(f"DEBUG delete_chart_of_account: Account document actual 'id' field: {actual_doc_id}", flush=True)
             print(f"DEBUG delete_chart_of_account: Using document ID: {actual_doc_id}, partition_key: {partition_key_value} (type: {type(partition_key_value).__name__})", flush=True)
@@ -1082,7 +1083,7 @@ def delete_chart_of_account(business_id, account_id):
                     {"name": "@business_id", "value": business_id},
                     {"name": "@account_id", "value": account_id}
                 ],
-                partition_key=str(business_id)
+                partition_key=business_id  # Try integer partition key for query too
             )
             
             if child_accounts:
@@ -1091,10 +1092,13 @@ def delete_chart_of_account(business_id, account_id):
                     'message': f'This account has {len(child_accounts)} child account(s). Please delete or reassign child accounts first.'
                 }), 400
             
-            # Delete the account (same approach as delete_transaction)
+            # Delete the account - use integer partition key since document has integer business_id
             # For chart_of_accounts container, partition key is /business_id
             try:
-                delete_item('chart_of_accounts', actual_doc_id, partition_key=partition_key_value)
+                # Try with integer partition key first (matches document field type)
+                from database_cosmos import get_container
+                container = get_container('chart_of_accounts')
+                container.delete_item(item=actual_doc_id, partition_key=partition_key_value)
                 print(f"DEBUG delete_chart_of_account: Successfully called delete_item", flush=True)
             except Exception as delete_error:
                 print(f"ERROR delete_chart_of_account: Exception in delete_item call: {delete_error}", flush=True)
