@@ -1032,53 +1032,37 @@ def delete_chart_of_account(business_id, account_id):
     print(f"DEBUG delete_chart_of_account: Called for business_id={business_id}, account_id={account_id}", flush=True)
     if USE_COSMOS_DB:
         try:
-            # Get the account to verify it exists and belongs to the business
-            account = get_chart_of_account(account_id, business_id)
-            if not account:
+            # Query for the account document directly to get its actual ID
+            # This ensures we get the real document ID that exists in Cosmos DB
+            account_docs = query_items(
+                'chart_of_accounts',
+                'SELECT * FROM c WHERE c.type = "chart_of_account" AND c.account_id = @account_id AND c.business_id = @business_id',
+                [
+                    {"name": "@account_id", "value": account_id},
+                    {"name": "@business_id", "value": business_id}
+                ],
+                partition_key=str(business_id)
+            )
+            
+            if not account_docs or len(account_docs) == 0:
                 return jsonify({'error': 'Account not found'}), 404
+            
+            account = account_docs[0]
             
             # Debug: Log the full account document to see its structure
             print(f"DEBUG delete_chart_of_account: Account document keys: {list(account.keys())}", flush=True)
-            print(f"DEBUG delete_chart_of_account: Account document: {account}", flush=True)
             print(f"DEBUG delete_chart_of_account: Account document ID field: {account.get('id')}", flush=True)
             print(f"DEBUG delete_chart_of_account: Account document account_id field: {account.get('account_id')}", flush=True)
             
-            # Get the actual document ID from the account document
-            # Cosmos DB documents should have an 'id' field that matches the document ID
+            # Get the actual document ID - this should be the real Cosmos DB document ID
             account_doc_id = account.get('id')
             
-            # If 'id' is missing, try to get it directly from Cosmos DB by querying with the constructed ID
             if not account_doc_id:
-                # Try to get the document directly by its expected ID
-                constructed_id = f'account-{business_id}-{account_id}'
-                print(f"WARNING delete_chart_of_account: Account document missing 'id' field, trying to get document by ID: {constructed_id}", flush=True)
-                
-                try:
-                    # Try to get the document directly by ID
-                    direct_account = get_item('chart_of_accounts', constructed_id, partition_key=str(business_id))
-                    if direct_account:
-                        account_doc_id = direct_account.get('id') or constructed_id
-                        print(f"DEBUG delete_chart_of_account: Found document by direct ID lookup: {account_doc_id}", flush=True)
-                    else:
-                        account_doc_id = constructed_id
-                        print(f"WARNING delete_chart_of_account: Direct lookup failed, using constructed ID: {account_doc_id}", flush=True)
-                except Exception as e:
-                    print(f"WARNING delete_chart_of_account: Error getting document by ID: {e}, using constructed ID: {constructed_id}", flush=True)
-                    account_doc_id = constructed_id
+                # If ID is still missing, try constructed format as fallback
+                account_doc_id = f'account-{business_id}-{account_id}'
+                print(f"WARNING delete_chart_of_account: Account document missing 'id' field, using constructed ID: {account_doc_id}", flush=True)
             else:
                 print(f"DEBUG delete_chart_of_account: Using account document ID from query: {account_doc_id}", flush=True)
-            
-            # Verify the document exists before trying to delete
-            try:
-                verify_account = get_item('chart_of_accounts', account_doc_id, partition_key=str(business_id))
-                if verify_account:
-                    print(f"DEBUG delete_chart_of_account: Verified document exists with ID: {account_doc_id}", flush=True)
-                else:
-                    print(f"ERROR delete_chart_of_account: Document with ID {account_doc_id} does not exist in Cosmos DB", flush=True)
-                    return jsonify({'error': f'Account document not found. Expected ID: {account_doc_id}'}), 404
-            except Exception as e:
-                print(f"ERROR delete_chart_of_account: Error verifying document existence: {e}", flush=True)
-                # Continue anyway - the delete will fail if it doesn't exist
             
             # Check if account has child accounts
             child_accounts = query_items(
