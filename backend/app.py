@@ -685,9 +685,10 @@ def create_chart_of_account(business_id):
             existing_accounts = cosmos_get_chart_of_accounts(business_id)
             next_id = max([acc.get('id') or acc.get('account_id', 0) for acc in existing_accounts], default=0) + 1
             
-            # Create account document
+            # Create account document with UUID for portability across NoSQL databases
+            import uuid
             account_doc = {
-                'id': f'account-{business_id}-{next_id}',
+                'id': str(uuid.uuid4()),  # Use UUID for document ID - portable across NoSQL databases
                 'type': 'chart_of_account',
                 'account_id': next_id,
                 'business_id': business_id,
@@ -1084,12 +1085,12 @@ def delete_chart_of_account(business_id, account_id):
                 return jsonify({'error': 'Account does not belong to this business'}), 403
             
             # Get the actual document ID from the retrieved account
-            # The 'id' field in the document should match the Cosmos DB document ID
+            # Document IDs are now UUIDs for portability
             actual_doc_id = account.get('id')
             if not actual_doc_id:
-                # Fallback: construct ID from account_id if id field is missing
-                actual_doc_id = f"account-{business_id}-{account_id}"
-                print(f"DEBUG delete_chart_of_account: Warning - account document missing 'id' field, constructing: {actual_doc_id}", flush=True)
+                # This should never happen, but if it does, we can't delete without an ID
+                print(f"ERROR delete_chart_of_account: Account document missing 'id' field - cannot delete", flush=True)
+                return jsonify({'error': 'Account document missing ID field'}), 500
             
             # For chart_of_accounts container, partition key path is /business_id
             # The document shows business_id as an integer (3), so use integer partition key
@@ -3155,7 +3156,7 @@ def import_transactions_csv(business_id):
                         
                         # Create chart of account for this bank
                         account_doc = {
-                            'id': f'account-{business_id}-{next_account_id}',
+                            'id': str(uuid.uuid4()),  # Use UUID for document ID
                             'type': 'chart_of_account',
                             'account_id': next_account_id,
                             'business_id': business_id,
@@ -3203,7 +3204,7 @@ def import_transactions_csv(business_id):
                         next_account_id = max([acc.get('id') or acc.get('account_id', 0) for acc in existing_accounts], default=0) + 1
                         
                         account_doc = {
-                            'id': f'account-{business_id}-{next_account_id}',
+                            'id': str(uuid.uuid4()),  # Use UUID for document ID
                             'type': 'chart_of_account',
                             'account_id': next_account_id,
                             'business_id': business_id,

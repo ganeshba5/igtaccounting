@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """
-Migration script to update Chart of Accounts document IDs from old format (chart-{id}) 
-to new format (account-{business_id}-{id}) for uniqueness across businesses.
+Migration script to update Chart of Accounts document IDs to UUID format for portability.
 
 This script:
 1. Queries all chart_of_accounts documents
-2. Finds documents with old ID format (chart-{id})
-3. Updates them to new format (account-{business_id}-{id})
-4. Uses replace_item to update the document ID
+2. Generates UUIDs for each document
+3. Creates new documents with UUID IDs
+4. Deletes old documents
+5. Ensures uniqueness and portability across NoSQL databases
+
+Note: Document IDs are now UUIDs, but queries still use account_id and business_id fields.
 """
 
 import os
 import sys
+import uuid
 from typing import Dict, Any, List
 
 # Add backend to path
@@ -21,20 +24,18 @@ from database_cosmos import query_items, get_container, get_database
 from azure.cosmos import exceptions
 
 def migrate_chart_of_accounts_ids():
-    """Migrate chart of accounts IDs from chart-{id} to account-{business_id}-{id} format."""
+    """Migrate chart of accounts IDs to UUID format for portability."""
     
-    print("Starting Chart of Accounts ID migration...")
+    print("Starting Chart of Accounts ID migration to UUID format...")
+    print("=" * 60)
+    print("This will update all document IDs to UUIDs for better portability across NoSQL databases.")
     print("=" * 60)
     
-    # Get all chart of accounts documents (cross-partition query)
-    # We need to query all businesses to find documents with old format
     container = get_container('chart_of_accounts')
     
-    all_accounts = []
     print("Fetching all chart of accounts documents...")
     
-    # Query all businesses (we'll need to iterate through known business IDs)
-    # For now, let's query cross-partition to find all accounts
+    # Query all accounts (cross-partition query)
     query = 'SELECT * FROM c WHERE c.type = "chart_of_account"'
     accounts = list(container.query_items(
         query=query,
@@ -44,17 +45,23 @@ def migrate_chart_of_accounts_ids():
     
     print(f"Found {len(accounts)} total chart of accounts documents")
     
-    # Filter accounts with old format (chart-{id})
+    # Check which accounts need migration (any that don't look like UUIDs)
     accounts_to_migrate = []
     for account in accounts:
         doc_id = account.get('id', '')
-        if doc_id.startswith('chart-'):
+        # Check if ID is already a UUID (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+        try:
+            uuid.UUID(doc_id)
+            # Already a UUID, skip
+            continue
+        except (ValueError, TypeError):
+            # Not a UUID, needs migration
             accounts_to_migrate.append(account)
     
-    print(f"Found {len(accounts_to_migrate)} accounts with old ID format (chart-*)")
+    print(f"Found {len(accounts_to_migrate)} accounts that need migration to UUID format")
     
     if not accounts_to_migrate:
-        print("No accounts need migration. All IDs are already in the correct format.")
+        print("No accounts need migration. All IDs are already UUIDs.")
         return
     
     # Group by business_id for reporting
@@ -69,9 +76,16 @@ def migrate_chart_of_accounts_ids():
     for business_id, accounts in by_business.items():
         print(f"  Business {business_id}: {len(accounts)} accounts")
     
+    # Show sample of old IDs
+    print(f"\nSample of old IDs to be migrated:")
+    for account in accounts_to_migrate[:5]:
+        print(f"  - {account.get('id')} (account_id={account.get('account_id')}, business_id={account.get('business_id')})")
+    if len(accounts_to_migrate) > 5:
+        print(f"  ... and {len(accounts_to_migrate) - 5} more")
+    
     # Confirm before proceeding
     print("\n" + "=" * 60)
-    response = input(f"Proceed with migrating {len(accounts_to_migrate)} accounts? (yes/no): ")
+    response = input(f"Proceed with migrating {len(accounts_to_migrate)} accounts to UUID format? (yes/no): ")
     if response.lower() != 'yes':
         print("Migration cancelled.")
         return
@@ -81,7 +95,7 @@ def migrate_chart_of_accounts_ids():
     error_count = 0
     errors = []
     
-    print("\nMigrating accounts...")
+    print("\nMigrating accounts to UUID format...")
     print("=" * 60)
     
     for account in accounts_to_migrate:
@@ -96,22 +110,15 @@ def migrate_chart_of_accounts_ids():
             error_count += 1
             continue
         
-        new_id = f'account-{business_id}-{account_id}'
+        # Generate new UUID
+        new_id = str(uuid.uuid4())
+        partition_key = int(business_id)
         
         try:
-            # Update the account document with new ID
-            account['id'] = new_id
-            partition_key = int(business_id)
-            
-            # Use replace_item - but first we need to read the existing document to get _etag
-            # Then create with new ID and delete old one
-            # Actually, in Cosmos DB we can't change the ID of a document directly
-            # We need to create a new document with the new ID and delete the old one
-            
             # Read existing document
             existing = container.read_item(item=old_id, partition_key=partition_key)
             
-            # Create new document with new ID
+            # Create new document with UUID ID
             new_doc = dict(existing)
             new_doc['id'] = new_id
             # Remove system fields that will be regenerated
@@ -120,7 +127,7 @@ def migrate_chart_of_accounts_ids():
             
             # Create new document
             container.create_item(body=new_doc, partition_key=partition_key)
-            print(f"✓ Created new document: {new_id} (was {old_id})")
+            print(f"✓ Created new document with UUID: {new_id} (was {old_id})")
             
             # Delete old document
             container.delete_item(item=old_id, partition_key=partition_key)
@@ -134,7 +141,7 @@ def migrate_chart_of_accounts_ids():
             errors.append(error_msg)
             error_count += 1
         except Exception as e:
-            error_msg = f"Error migrating account old_id={old_id} to new_id={new_id}: {str(e)}"
+            error_msg = f"Error migrating account old_id={old_id} to UUID: {str(e)}"
             print(f"ERROR: {error_msg}")
             errors.append(error_msg)
             error_count += 1
