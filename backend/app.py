@@ -609,24 +609,32 @@ def create_chart_of_account(business_id):
             if existing:
                 return jsonify({'error': 'Account code already exists for this business'}), 400
             
-            # Get account type info if provided
+            # Get account type info if provided - MUST embed for P&L reports to work
             account_type_info = None
             if account_type_id:
-                account_types = query_items(
-                    'account_types',
-                    'SELECT * FROM c WHERE c.type = "account_type" AND c.account_type_id = @account_type_id',
-                    [{"name": "@account_type_id", "value": account_type_id}],
-                    partition_key=None
-                )
-                if account_types:
-                    at = account_types[0]
-                    account_type_info = {
-                        'id': at.get('account_type_id'),
-                        'code': at.get('code'),
-                        'name': at.get('name'),
-                        'category': at.get('category'),
-                        'normal_balance': at.get('normal_balance')
-                    }
+                try:
+                    account_types = query_items(
+                        'account_types',
+                        'SELECT * FROM c WHERE c.type = "account_type" AND c.account_type_id = @account_type_id',
+                        [{"name": "@account_type_id", "value": account_type_id}],
+                        partition_key=None
+                    )
+                    if account_types:
+                        at = account_types[0]
+                        account_type_info = {
+                            'id': at.get('account_type_id'),
+                            'code': at.get('code'),
+                            'name': at.get('name'),
+                            'category': at.get('category'),
+                            'normal_balance': at.get('normal_balance')
+                        }
+                        print(f"DEBUG create_chart_of_account: Found account_type for account_type_id={account_type_id}: {account_type_info}", flush=True)
+                    else:
+                        print(f"WARNING create_chart_of_account: No account_type found for account_type_id={account_type_id}", flush=True)
+                except Exception as e:
+                    print(f"ERROR create_chart_of_account: Failed to fetch account_type for account_type_id={account_type_id}: {e}", flush=True)
+                    import traceback
+                    traceback.print_exc()
             
             # Get next account_id
             existing_accounts = cosmos_get_chart_of_accounts(business_id)
@@ -647,10 +655,20 @@ def create_chart_of_account(business_id):
                 'created_at': datetime.utcnow().isoformat()
             }
             
+            # ALWAYS embed account_type if account_type_id is provided and we have the info
             if account_type_info:
                 account_doc['account_type'] = account_type_info
+                print(f"DEBUG create_chart_of_account: Embedding account_type in account_doc", flush=True)
+            elif account_type_id:
+                print(f"WARNING create_chart_of_account: account_type_id={account_type_id} provided but account_type_info is None - account_type will NOT be embedded!", flush=True)
             
             created = create_item('chart_of_accounts', account_doc, partition_key=str(business_id))
+            
+            # Verify account_type was saved
+            if 'account_type' in created:
+                print(f"DEBUG create_chart_of_account: account_type successfully embedded in created document", flush=True)
+            elif account_type_id:
+                print(f"WARNING create_chart_of_account: account_type was NOT saved in created document despite account_type_id={account_type_id}", flush=True)
             
             # Return in expected format
             result = {
