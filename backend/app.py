@@ -567,12 +567,15 @@ def get_chart_of_accounts(business_id):
 def create_chart_of_account(business_id):
     """Create a new account in the chart of accounts."""
     data = request.get_json()
+    print(f"DEBUG create_chart_of_account: Called for business_id={business_id}, data={data}", flush=True)
     
     account_code = data.get('account_code')
     account_name = data.get('account_name')
     account_type_id = data.get('account_type_id')
     description = data.get('description', '')
     parent_account_id = data.get('parent_account_id')
+    
+    print(f"DEBUG create_chart_of_account: account_type_id={account_type_id} (type: {type(account_type_id)})", flush=True)
     
     if not account_code or not account_name:
         return jsonify({'error': 'Account code and name are required'}), 400
@@ -612,17 +615,33 @@ def create_chart_of_account(business_id):
             # Get account type info if provided - MUST embed for P&L reports to work
             account_type_info = None
             if account_type_id:
+                print(f"DEBUG create_chart_of_account: Attempting to fetch account_type for account_type_id={account_type_id}", flush=True)
                 try:
+                    # Try querying with account_type_id as the field name
                     account_types = query_items(
                         'account_types',
                         'SELECT * FROM c WHERE c.type = "account_type" AND c.account_type_id = @account_type_id',
                         [{"name": "@account_type_id", "value": account_type_id}],
                         partition_key=None
                     )
-                    if account_types:
+                    print(f"DEBUG create_chart_of_account: Query returned {len(account_types) if account_types else 0} account_types", flush=True)
+                    
+                    if not account_types or len(account_types) == 0:
+                        # Try alternative query - maybe the field is just 'id'?
+                        print(f"DEBUG create_chart_of_account: Trying alternative query with id field", flush=True)
+                        account_types = query_items(
+                            'account_types',
+                            'SELECT * FROM c WHERE c.type = "account_type" AND c.id = @account_type_id',
+                            [{"name": "@account_type_id", "value": account_type_id}],
+                            partition_key=None
+                        )
+                        print(f"DEBUG create_chart_of_account: Alternative query returned {len(account_types) if account_types else 0} account_types", flush=True)
+                    
+                    if account_types and len(account_types) > 0:
                         at = account_types[0]
+                        print(f"DEBUG create_chart_of_account: Account type document keys: {list(at.keys())}", flush=True)
                         account_type_info = {
-                            'id': at.get('account_type_id'),
+                            'id': at.get('account_type_id') or at.get('id'),
                             'code': at.get('code'),
                             'name': at.get('name'),
                             'category': at.get('category'),
@@ -630,11 +649,13 @@ def create_chart_of_account(business_id):
                         }
                         print(f"DEBUG create_chart_of_account: Found account_type for account_type_id={account_type_id}: {account_type_info}", flush=True)
                     else:
-                        print(f"WARNING create_chart_of_account: No account_type found for account_type_id={account_type_id}", flush=True)
+                        print(f"WARNING create_chart_of_account: No account_type found for account_type_id={account_type_id} after trying both queries", flush=True)
                 except Exception as e:
                     print(f"ERROR create_chart_of_account: Failed to fetch account_type for account_type_id={account_type_id}: {e}", flush=True)
                     import traceback
                     traceback.print_exc()
+            else:
+                print(f"WARNING create_chart_of_account: account_type_id is None or empty, skipping account_type embedding", flush=True)
             
             # Get next account_id
             existing_accounts = cosmos_get_chart_of_accounts(business_id)
