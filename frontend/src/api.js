@@ -95,6 +95,7 @@ const api = {
   getChartOfAccounts: (businessId) => axiosInstance.get(`/businesses/${businessId}/chart-of-accounts`),
   createChartOfAccount: (businessId, data) => axiosInstance.post(`/businesses/${businessId}/chart-of-accounts`, data),
   updateChartOfAccount: (businessId, accountId, data) => axiosInstance.put(`/businesses/${businessId}/chart-of-accounts/${accountId}`, data),
+  deleteChartOfAccount: (businessId, accountId) => axiosInstance.delete(`/businesses/${businessId}/chart-of-accounts/${accountId}`),
   getAccountTypes: () => axiosInstance.get('/account-types'),
   
   // Bank Accounts

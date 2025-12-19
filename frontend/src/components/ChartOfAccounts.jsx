@@ -69,6 +69,20 @@ function ChartOfAccounts() {
     }
   }
 
+  const handleDelete = async (account) => {
+    if (!window.confirm(`Are you sure you want to delete "${account.account_code} - ${account.account_name}"?\n\nThis action cannot be undone.`)) {
+      return
+    }
+    
+    try {
+      await api.deleteChartOfAccount(businessId, account.id)
+      loadData()
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message
+      alert(`Error deleting account: ${errorMessage}`)
+    }
+  }
+
   if (loading) {
     return <div className="container loading">Loading...</div>
   }
@@ -120,13 +134,22 @@ function ChartOfAccounts() {
                   <td>{account.category || '-'}</td>
                   <td>{account.normal_balance || '-'}</td>
                   <td>
-                    <button 
-                      className="btn btn-secondary" 
-                      onClick={() => handleEdit(account)}
-                      style={{ padding: '5px 10px', fontSize: '12px' }}
-                    >
-                      Edit
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button 
+                        className="btn btn-secondary" 
+                        onClick={() => handleEdit(account)}
+                        style={{ padding: '5px 10px', fontSize: '12px' }}
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        className="btn btn-secondary" 
+                        onClick={() => handleDelete(account)}
+                        style={{ padding: '5px 10px', fontSize: '12px', backgroundColor: '#dc3545', color: 'white', border: 'none' }}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )
