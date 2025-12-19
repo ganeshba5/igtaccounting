@@ -34,45 +34,9 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Wait for any ongoing deployments to complete
-        run: |
-          echo "Checking for ongoing deployments..."
-          MAX_WAIT=300  # 5 minutes max wait
-          WAIT_INTERVAL=10  # Check every 10 seconds
-          ELAPSED=0
-          
-          while [ $ELAPSED -lt $MAX_WAIT ]; do
-            DEPLOYMENTS=$(az webapp deployment list --name ${{ secrets.AZURE_WEBAPP_NAME }} --resource-group IgtAcct --query "[?status=='Running'].id" -o tsv 2>/dev/null || echo "")
-            if [ -z "$DEPLOYMENTS" ]; then
-              echo "No ongoing deployments found. Proceeding with deployment."
-              break
-            else
-              echo "Waiting for ongoing deployments to complete... (${ELAPSED}s elapsed)"
-              sleep $WAIT_INTERVAL
-              ELAPSED=$((ELAPSED + WAIT_INTERVAL))
-            fi
-          done
-          
-          if [ $ELAPSED -ge $MAX_WAIT ]; then
-            echo "Warning: Timeout waiting for deployments. Proceeding anyway."
-          fi
-
-      - name: Create deployment package
-        run: |
-          # Create a zip file of the entire directory
-          zip -r deploy.zip . -x "*.git*" "*.github*" "*.env*" "node_modules/*" "frontend/node_modules/*" "frontend/build/*" ".venv/*" "venv/*" "__pycache__/*" "*.pyc"
-
-      - name: Deploy to Azure Web App (with retry)
-        uses: nick-invision/retry@v2
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
         with:
-          timeout_minutes: 15
-          max_attempts: 3
-          retry_wait_seconds: 30
-          on_retry_command: echo "Retrying deployment after conflict error..."
-          command: |
-            az webapp deployment source config-zip \
-              --resource-group IgtAcct \
-              --name ${{ secrets.AZURE_WEBAPP_NAME }} \
-              --slot production \
-              --src deploy.zip
-
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          package: .
+          resource-group-name: IgtAcct
