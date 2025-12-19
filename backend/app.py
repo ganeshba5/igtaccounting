@@ -1032,37 +1032,47 @@ def delete_chart_of_account(business_id, account_id):
     print(f"DEBUG delete_chart_of_account: Called for business_id={business_id}, account_id={account_id}", flush=True)
     if USE_COSMOS_DB:
         try:
-            # Query for the account document directly to get its actual ID
-            # This ensures we get the real document ID that exists in Cosmos DB
-            account_docs = query_items(
-                'chart_of_accounts',
-                'SELECT * FROM c WHERE c.type = "chart_of_account" AND c.account_id = @account_id AND c.business_id = @business_id',
-                [
-                    {"name": "@account_id", "value": account_id},
-                    {"name": "@business_id", "value": business_id}
-                ],
-                partition_key=str(business_id)
-            )
+            from azure.cosmos import exceptions as cosmos_exceptions
             
-            if not account_docs or len(account_docs) == 0:
+            # Get the account to verify it exists and belongs to the business
+            # Use the same approach as delete_transaction
+            print(f"DEBUG delete_chart_of_account: Looking for account_id={account_id} (type: {type(account_id).__name__}), business_id={business_id} (type: {type(business_id).__name__})", flush=True)
+            account = get_chart_of_account(account_id, business_id)
+            
+            if not account:
+                print(f"DEBUG delete_chart_of_account: Account {account_id} not found for business {business_id}", flush=True)
                 return jsonify({'error': 'Account not found'}), 404
             
-            account = account_docs[0]
+            # Verify business_id matches
+            acc_business_id = account.get('business_id')
+            if acc_business_id and int(acc_business_id) != business_id:
+                print(f"DEBUG delete_chart_of_account: Business ID mismatch - account has {acc_business_id}, requested {business_id}", flush=True)
+                return jsonify({'error': 'Account does not belong to this business'}), 403
             
-            # Debug: Log the full account document to see its structure
-            print(f"DEBUG delete_chart_of_account: Account document keys: {list(account.keys())}", flush=True)
-            print(f"DEBUG delete_chart_of_account: Account document ID field: {account.get('id')}", flush=True)
-            print(f"DEBUG delete_chart_of_account: Account document account_id field: {account.get('account_id')}", flush=True)
+            # Get the actual document ID from the retrieved account
+            # The 'id' field in the document should match the Cosmos DB document ID
+            actual_doc_id = account.get('id')
+            if not actual_doc_id:
+                # Fallback: construct ID from account_id if id field is missing
+                actual_doc_id = f"account-{business_id}-{account_id}"
+                print(f"DEBUG delete_chart_of_account: Warning - account document missing 'id' field, constructing: {actual_doc_id}", flush=True)
             
-            # Get the actual document ID - this should be the real Cosmos DB document ID
-            account_doc_id = account.get('id')
+            # For chart_of_accounts container, partition key path is /business_id
+            # So the partition key value should be the business_id (as string)
+            partition_key_value = str(business_id)
             
-            if not account_doc_id:
-                # If ID is still missing, try constructed format as fallback
-                account_doc_id = f'account-{business_id}-{account_id}'
-                print(f"WARNING delete_chart_of_account: Account document missing 'id' field, using constructed ID: {account_doc_id}", flush=True)
-            else:
-                print(f"DEBUG delete_chart_of_account: Using account document ID from query: {account_doc_id}", flush=True)
+            # Ensure business_id from account matches (handle both int and string)
+            if acc_business_id:
+                acc_business_id = int(acc_business_id)
+                if acc_business_id != business_id:
+                    print(f"DEBUG delete_chart_of_account: Business ID mismatch - account has {acc_business_id}, requested {business_id}", flush=True)
+                    return jsonify({'error': 'Account does not belong to this business'}), 403
+                # Use the business_id from the account document to be safe
+                partition_key_value = str(acc_business_id)
+            
+            print(f"DEBUG delete_chart_of_account: Account document actual 'id' field: {actual_doc_id}", flush=True)
+            print(f"DEBUG delete_chart_of_account: Using document ID: {actual_doc_id}, partition_key: {partition_key_value} (type: {type(partition_key_value).__name__})", flush=True)
+            print(f"DEBUG delete_chart_of_account: Account document fields: id={account.get('id')}, account_id={account.get('account_id')}, business_id={account.get('business_id')} (type: {type(account.get('business_id')).__name__})", flush=True)
             
             # Check if account has child accounts
             child_accounts = query_items(
@@ -1081,78 +1091,17 @@ def delete_chart_of_account(business_id, account_id):
                     'message': f'This account has {len(child_accounts)} child account(s). Please delete or reassign child accounts first.'
                 }), 400
             
-            # Delete the account using the document object directly
-            # The document exists (we just queried it), so delete it directly
-            # Using the document object ensures we use the exact ID and structure Cosmos DB expects
-            print(f"DEBUG delete_chart_of_account: Deleting account with document ID: {account_doc_id}, partition_key: {str(business_id)}", flush=True)
-            print(f"DEBUG delete_chart_of_account: Account document from query has keys: {list(account.keys())}", flush=True)
-            print(f"DEBUG delete_chart_of_account: Account document _self: {account.get('_self')}", flush=True)
-            print(f"DEBUG delete_chart_of_account: Account document _rid: {account.get('_rid')}", flush=True)
-            
-            # Use the account document's business_id for partition key to ensure it matches
-            # Try both string and integer formats since Cosmos DB might store it differently
-            business_id_from_doc = account.get('business_id') or business_id
-            partition_key_str = str(business_id_from_doc)
-            partition_key_int = int(business_id_from_doc) if isinstance(business_id_from_doc, (int, str)) and str(business_id_from_doc).isdigit() else business_id_from_doc
-            
-            print(f"DEBUG delete_chart_of_account: Account document business_id type: {type(business_id_from_doc)}, value: {business_id_from_doc}", flush=True)
-            print(f"DEBUG delete_chart_of_account: Will try partition_key as string: '{partition_key_str}' and as int: {partition_key_int}", flush=True)
-            
-            # Try deleting using the document object directly
-            # The Cosmos DB SDK should extract the ID from the document object
-            from database_cosmos import get_container
-            container = get_container('chart_of_accounts')
-            
-            # Try multiple approaches in order of preference
-            deleted = False
-            last_error = None
-            
-            # Method 1: Use document object with string partition key
+            # Delete the account (same approach as delete_transaction)
+            # For chart_of_accounts container, partition key is /business_id
             try:
-                print(f"DEBUG delete_chart_of_account: Attempting delete using document object with string partition key", flush=True)
-                container.delete_item(item=account, partition_key=partition_key_str)
-                print(f"DEBUG delete_chart_of_account: Successfully deleted using document object with string partition key", flush=True)
-                deleted = True
-            except Exception as e1:
-                last_error = e1
-                print(f"WARNING delete_chart_of_account: Delete with document object (string PK) failed: {e1}", flush=True)
+                delete_item('chart_of_accounts', actual_doc_id, partition_key=partition_key_value)
+                print(f"DEBUG delete_chart_of_account: Successfully called delete_item", flush=True)
+            except Exception as delete_error:
+                print(f"ERROR delete_chart_of_account: Exception in delete_item call: {delete_error}", flush=True)
+                print(f"ERROR delete_chart_of_account: delete_item called with: container='chart_of_accounts', item_id='{actual_doc_id}', partition_key='{partition_key_value}'", flush=True)
+                raise
             
-            # Method 2: Use document object with integer partition key
-            if not deleted:
-                try:
-                    print(f"DEBUG delete_chart_of_account: Attempting delete using document object with integer partition key", flush=True)
-                    container.delete_item(item=account, partition_key=partition_key_int)
-                    print(f"DEBUG delete_chart_of_account: Successfully deleted using document object with integer partition key", flush=True)
-                    deleted = True
-                except Exception as e2:
-                    last_error = e2
-                    print(f"WARNING delete_chart_of_account: Delete with document object (int PK) failed: {e2}", flush=True)
-            
-            # Method 3: Use ID string with string partition key
-            if not deleted:
-                try:
-                    print(f"DEBUG delete_chart_of_account: Attempting delete using ID string with string partition key: {account_doc_id}", flush=True)
-                    container.delete_item(item=account_doc_id, partition_key=partition_key_str)
-                    print(f"DEBUG delete_chart_of_account: Successfully deleted using ID string with string partition key", flush=True)
-                    deleted = True
-                except Exception as e3:
-                    last_error = e3
-                    print(f"WARNING delete_chart_of_account: Delete with ID string (string PK) failed: {e3}", flush=True)
-            
-            # Method 4: Use ID string with integer partition key
-            if not deleted:
-                try:
-                    print(f"DEBUG delete_chart_of_account: Attempting delete using ID string with integer partition key: {account_doc_id}", flush=True)
-                    container.delete_item(item=account_doc_id, partition_key=partition_key_int)
-                    print(f"DEBUG delete_chart_of_account: Successfully deleted using ID string with integer partition key", flush=True)
-                    deleted = True
-                except Exception as e4:
-                    last_error = e4
-                    print(f"ERROR delete_chart_of_account: Delete with ID string (int PK) also failed: {e4}", flush=True)
-            
-            # If all methods failed, raise the last error
-            if not deleted:
-                raise last_error
+            print(f"DEBUG delete_chart_of_account: Successfully deleted account {account_id}", flush=True)
             
             return jsonify({'message': 'Account deleted successfully'}), 200
         except cosmos_exceptions.CosmosResourceNotFoundError as e:
