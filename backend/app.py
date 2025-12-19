@@ -1128,24 +1128,10 @@ def delete_chart_of_account(business_id, account_id):
                     'message': f'This account has {len(child_accounts)} child account(s). Please delete or reassign child accounts first.'
                 }), 400
             
-            # Delete the account - use integer partition key since document has integer business_id
-            # For chart_of_accounts container, partition key is /business_id
-            try:
-                # Try with integer partition key first (matches document field type)
-                from database_cosmos import get_container
-                container = get_container('chart_of_accounts')
-                container.delete_item(item=actual_doc_id, partition_key=partition_key_value)
-                print(f"DEBUG delete_chart_of_account: Successfully deleted using integer partition key", flush=True)
-            except Exception as delete_error:
-                # If integer fails, try string partition key as fallback
-                print(f"WARNING delete_chart_of_account: Delete with integer partition key failed: {delete_error}, trying string...", flush=True)
-                try:
-                    container.delete_item(item=actual_doc_id, partition_key=str(partition_key_value))
-                    print(f"DEBUG delete_chart_of_account: Successfully deleted using string partition key", flush=True)
-                except Exception as delete_error2:
-                    print(f"ERROR delete_chart_of_account: Both integer and string partition keys failed", flush=True)
-                    print(f"ERROR delete_chart_of_account: delete_item called with: container='chart_of_accounts', item_id='{actual_doc_id}', partition_key={partition_key_value} (type: {type(partition_key_value).__name__})", flush=True)
-                    raise delete_error2
+            # Delete the account - use integer partition key to match document field type
+            # For chart_of_accounts container, partition key is /business_id (integer)
+            from database_cosmos import delete_item
+            delete_item('chart_of_accounts', actual_doc_id, partition_key=int(business_id))
             
             print(f"DEBUG delete_chart_of_account: Successfully deleted account {account_id}", flush=True)
             
