@@ -20,7 +20,7 @@ from typing import Dict, Any, List
 # Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
 
-from database_cosmos import query_items, get_container, get_database, delete_item
+from database_cosmos import query_items, get_container, get_database, create_item
 from azure.cosmos import exceptions
 
 def migrate_chart_of_accounts_ids():
