@@ -3204,6 +3204,7 @@ def import_transactions_csv(business_id):
                         existing_accounts = get_chart_of_accounts(business_id)
                         next_account_id = max([acc.get('id') or acc.get('account_id', 0) for acc in existing_accounts], default=0) + 1
                         
+                        import uuid
                         account_doc = {
                             'id': str(uuid.uuid4()),  # Use UUID for document ID
                             'type': 'chart_of_account',
