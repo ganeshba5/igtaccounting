@@ -321,15 +321,32 @@ def delete_item_by_document(container_name: str, document: Dict[str, Any], parti
     """Delete an item using the document object directly."""
     container = get_container(container_name)
     doc_id = document.get('id')
+    doc_self = document.get('_self')
     print(f"DEBUG delete_item_by_document: Deleting from container '{container_name}', document_id='{doc_id}', partition_key='{partition_key}'")
+    print(f"DEBUG delete_item_by_document: Document _self: {doc_self}")
     print(f"DEBUG delete_item_by_document: Document keys: {list(document.keys())}")
+    
     try:
         # Try using the document object directly - Cosmos DB SDK should extract the ID
+        # The SDK's delete_item can accept either a string ID or a document dict
         container.delete_item(item=document, partition_key=partition_key)
         print(f"DEBUG delete_item_by_document: Successfully deleted document '{doc_id}' from '{container_name}'")
     except Exception as e:
-        print(f"ERROR delete_item_by_document: Failed to delete document '{doc_id}': {e}")
-        raise
+        error_msg = str(e)
+        print(f"ERROR delete_item_by_document: Failed to delete document '{doc_id}': {error_msg}")
+        
+        # If document-based delete fails, try using _self link if available
+        if doc_self and 'NotFound' in error_msg:
+            print(f"DEBUG delete_item_by_document: Trying delete using _self link: {doc_self}")
+            try:
+                # _self is a full resource path, but we still need partition key
+                # Extract ID from _self and try again
+                container.delete_item(item=doc_id, partition_key=partition_key)
+            except Exception as e2:
+                print(f"ERROR delete_item_by_document: Delete with _self also failed: {e2}")
+                raise e  # Re-raise original error
+        else:
+            raise
 
 # ========== ACCOUNTING-SPECIFIC QUERIES ==========
 
