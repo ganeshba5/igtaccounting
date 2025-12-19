@@ -1099,11 +1099,17 @@ def delete_chart_of_account(business_id, account_id):
                 from database_cosmos import get_container
                 container = get_container('chart_of_accounts')
                 container.delete_item(item=actual_doc_id, partition_key=partition_key_value)
-                print(f"DEBUG delete_chart_of_account: Successfully called delete_item", flush=True)
+                print(f"DEBUG delete_chart_of_account: Successfully deleted using integer partition key", flush=True)
             except Exception as delete_error:
-                print(f"ERROR delete_chart_of_account: Exception in delete_item call: {delete_error}", flush=True)
-                print(f"ERROR delete_chart_of_account: delete_item called with: container='chart_of_accounts', item_id='{actual_doc_id}', partition_key='{partition_key_value}'", flush=True)
-                raise
+                # If integer fails, try string partition key as fallback
+                print(f"WARNING delete_chart_of_account: Delete with integer partition key failed: {delete_error}, trying string...", flush=True)
+                try:
+                    container.delete_item(item=actual_doc_id, partition_key=str(partition_key_value))
+                    print(f"DEBUG delete_chart_of_account: Successfully deleted using string partition key", flush=True)
+                except Exception as delete_error2:
+                    print(f"ERROR delete_chart_of_account: Both integer and string partition keys failed", flush=True)
+                    print(f"ERROR delete_chart_of_account: delete_item called with: container='chart_of_accounts', item_id='{actual_doc_id}', partition_key={partition_key_value} (type: {type(partition_key_value).__name__})", flush=True)
+                    raise delete_error2
             
             print(f"DEBUG delete_chart_of_account: Successfully deleted account {account_id}", flush=True)
             
