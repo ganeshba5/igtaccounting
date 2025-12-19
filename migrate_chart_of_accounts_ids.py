@@ -20,7 +20,7 @@ from typing import Dict, Any, List
 # Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
 
-from database_cosmos import query_items, get_container, get_database
+from database_cosmos import query_items, get_container, get_database, delete_item
 from azure.cosmos import exceptions
 
 def migrate_chart_of_accounts_ids():
@@ -129,8 +129,18 @@ def migrate_chart_of_accounts_ids():
             container.create_item(body=new_doc, partition_key=partition_key)
             print(f"✓ Created new document with UUID: {new_id} (was {old_id})")
             
-            # Delete old document
-            container.delete_item(item=old_id, partition_key=partition_key)
+            # Delete old document - use the helper function which handles partition key correctly
+            # For chart_of_accounts, partition key is business_id (as integer)
+            try:
+                # Try with integer partition key first (matches document field type)
+                delete_item('chart_of_accounts', old_id, partition_key=str(partition_key))
+            except Exception as del_err:
+                # If string fails, try integer
+                try:
+                    delete_item('chart_of_accounts', old_id, partition_key=partition_key)
+                except Exception as del_err2:
+                    # If both fail, try direct container call
+                    container.delete_item(item=old_id, partition_key=str(partition_key))
             print(f"✓ Deleted old document: {old_id}")
             
             migrated_count += 1
