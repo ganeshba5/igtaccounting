@@ -1082,8 +1082,16 @@ def delete_chart_of_account(business_id, account_id):
                 }), 400
             
             # Delete the account using the actual document ID
-            print(f"DEBUG delete_chart_of_account: Deleting account with document ID: {account_doc_id}, partition_key: {business_id}", flush=True)
-            delete_item('chart_of_accounts', account_doc_id, partition_key=str(business_id))
+            # The document exists (we just queried it), so delete it directly
+            # Note: get_item verification may fail even if document exists, so we skip it
+            print(f"DEBUG delete_chart_of_account: Deleting account with document ID: {account_doc_id}, partition_key: {str(business_id)}", flush=True)
+            print(f"DEBUG delete_chart_of_account: Account document from query has keys: {list(account.keys())}", flush=True)
+            
+            # Use the account document's business_id for partition key to ensure it matches
+            partition_key_value = str(account.get('business_id') or business_id)
+            print(f"DEBUG delete_chart_of_account: Using partition_key: {partition_key_value} (from account document: {account.get('business_id')})", flush=True)
+            
+            delete_item('chart_of_accounts', account_doc_id, partition_key=partition_key_value)
             
             return jsonify({'message': 'Account deleted successfully'}), 200
         except Exception as e:
