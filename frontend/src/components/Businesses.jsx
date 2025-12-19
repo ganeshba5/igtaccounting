@@ -75,12 +75,6 @@ function Businesses() {
               <span style={{ fontSize: '18px' }}>⚙️</span>
               <span>Hub</span>
             </Link>
-            <Link to="/reports/combined-profit-loss" className="btn btn-primary" style={{ textDecoration: 'none' }}>
-              Combined P&L Report
-            </Link>
-            <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-              + New Business
-            </button>
           </div>
         </div>
 
