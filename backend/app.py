@@ -1095,24 +1095,37 @@ def delete_chart_of_account(business_id, account_id):
             
             # Try deleting using the document object directly
             # The Cosmos DB SDK should extract the ID from the document object
-            from database_cosmos import delete_item_by_document, get_container
+            from database_cosmos import get_container
+            container = get_container('chart_of_accounts')
+            
+            # Try multiple approaches in order of preference
+            deleted = False
+            last_error = None
+            
+            # Method 1: Use document object directly (preferred - SDK handles ID extraction)
             try:
-                delete_item_by_document('chart_of_accounts', account, partition_key=partition_key_value)
-            except Exception as doc_error:
-                # If document-based delete fails, try using _self link or container.delete_item with document
-                print(f"WARNING delete_chart_of_account: Document-based delete failed: {doc_error}", flush=True)
-                print(f"DEBUG delete_chart_of_account: Trying alternative delete methods", flush=True)
-                
-                # Try using container.delete_item with the document object directly
+                print(f"DEBUG delete_chart_of_account: Attempting delete using document object directly", flush=True)
+                container.delete_item(item=account, partition_key=partition_key_value)
+                print(f"DEBUG delete_chart_of_account: Successfully deleted using document object", flush=True)
+                deleted = True
+            except Exception as e1:
+                last_error = e1
+                print(f"WARNING delete_chart_of_account: Delete with document object failed: {e1}", flush=True)
+            
+            # Method 2: If document object fails, try with just the ID string
+            if not deleted:
                 try:
-                    container = get_container('chart_of_accounts')
-                    # Pass the document object - SDK should handle it
-                    container.delete_item(item=account, partition_key=partition_key_value)
-                    print(f"DEBUG delete_chart_of_account: Successfully deleted using document object directly", flush=True)
+                    print(f"DEBUG delete_chart_of_account: Attempting delete using ID string: {account_doc_id}", flush=True)
+                    container.delete_item(item=account_doc_id, partition_key=partition_key_value)
+                    print(f"DEBUG delete_chart_of_account: Successfully deleted using ID string", flush=True)
+                    deleted = True
                 except Exception as e2:
-                    print(f"ERROR delete_chart_of_account: All delete methods failed. Last error: {e2}", flush=True)
-                    # Final fallback: try with ID string
-                    delete_item('chart_of_accounts', account_doc_id, partition_key=partition_key_value)
+                    last_error = e2
+                    print(f"ERROR delete_chart_of_account: Delete with ID string also failed: {e2}", flush=True)
+            
+            # If both methods failed, raise the last error
+            if not deleted:
+                raise last_error
             
             return jsonify({'message': 'Account deleted successfully'}), 200
         except Exception as e:
