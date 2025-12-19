@@ -812,10 +812,10 @@ def update_chart_of_account(business_id, account_id):
             # Ensure business_id is set for partition key
             if 'business_id' not in account:
                 account['business_id'] = business_id
-                print(f"DEBUG: Set missing business_id to: {business_id}")
+                print(f"DEBUG update_chart_of_account: Set missing business_id to: {business_id}", flush=True)
             
             # Debug: Log account info
-            print(f"DEBUG: Updating chart of account - id={account.get('id')}, account_id={account.get('account_id')}, business_id={account.get('business_id')}")
+            print(f"DEBUG update_chart_of_account: Updating chart of account - id={account.get('id')}, account_id={account.get('account_id')}, business_id={account.get('business_id')}", flush=True)
             
             # Validate parent account if provided
             if 'parent_account_id' in data:
