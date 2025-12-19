@@ -914,8 +914,9 @@ def update_chart_of_account(business_id, account_id):
             # Debug: Log what we're about to update
             print(f"DEBUG update_chart_of_account: About to update account. ID: {account.get('id')}, account_type_id: {account.get('account_type_id')}, account_type: {account.get('account_type')}", flush=True)
             
-            # Update in Cosmos DB - use integer partition key (same as delete fix)
-            updated = update_item('chart_of_accounts', account, partition_key=int(business_id))
+            # Update in Cosmos DB - use string partition key (update_item expects string)
+            # The function will extract from item if not provided, but we explicitly pass it
+            updated = update_item('chart_of_accounts', account, partition_key=str(business_id))
             
             # Debug: Verify account_type was saved
             if 'account_type' in updated:
