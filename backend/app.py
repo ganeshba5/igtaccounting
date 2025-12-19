@@ -1155,10 +1155,17 @@ def delete_chart_of_account(business_id, account_id):
                 raise last_error
             
             return jsonify({'message': 'Account deleted successfully'}), 200
+        except cosmos_exceptions.CosmosResourceNotFoundError as e:
+            print(f"ERROR delete_chart_of_account: Account document not found in Cosmos DB: {e}", flush=True)
+            return jsonify({'error': 'Account not found in database'}), 404
+        except cosmos_exceptions.CosmosAccessConditionFailedError as e:
+            print(f"ERROR delete_chart_of_account: Access condition failed (concurrency conflict): {e}", flush=True)
+            return jsonify({'error': 'Account was modified by another operation. Please try again.'}), 409
         except Exception as e:
-            print(f"Error deleting chart of account: {e}")
+            print(f"ERROR delete_chart_of_account: Unexpected error: {e}", flush=True)
             import traceback
-            traceback.print_exc()
+            error_trace = traceback.format_exc()
+            print(f"Full traceback:\n{error_trace}", flush=True)
             return jsonify({'error': f'Error deleting account: {str(e)}'}), 500
     else:
         conn = get_db_connection()
