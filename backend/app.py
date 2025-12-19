@@ -914,9 +914,9 @@ def update_chart_of_account(business_id, account_id):
             # Debug: Log what we're about to update
             print(f"DEBUG update_chart_of_account: About to update account. ID: {account.get('id')}, account_type_id: {account.get('account_type_id')}, account_type: {account.get('account_type')}", flush=True)
             
-            # Update in Cosmos DB - use string partition key (update_item expects string)
-            # The function will extract from item if not provided, but we explicitly pass it
-            updated = update_item('chart_of_accounts', account, partition_key=str(business_id))
+            # Update in Cosmos DB - use integer partition key to match document field type
+            # For chart_of_accounts, partition key is /business_id which is an integer in documents
+            updated = update_item('chart_of_accounts', account, partition_key=int(business_id))
             
             # Debug: Verify account_type was saved
             if 'account_type' in updated:
@@ -2098,17 +2098,9 @@ def delete_transaction(business_id, transaction_id):
             print(f"DEBUG delete_transaction: Transaction document fields: id={transaction.get('id')}, transaction_id={transaction.get('transaction_id')}, business_id={transaction.get('business_id')} (type: {type(transaction.get('business_id')).__name__})", flush=True)
             
             # Delete the transaction (lines are embedded, so they'll be deleted too)
-            # For transactions container, partition key is /business_id
-            try:
-                # Try with integer partition key first (matches document field type)
-                from database_cosmos import get_container
-                container = get_container('transactions')
-                container.delete_item(item=actual_doc_id, partition_key=partition_key_value)
-                print(f"DEBUG delete_transaction: Successfully called delete_item")
-            except Exception as delete_error:
-                print(f"ERROR delete_transaction: Exception in delete_item call: {delete_error}")
-                print(f"ERROR delete_transaction: delete_item called with: container='transactions', item_id='{actual_doc_id}', partition_key='{partition_key_value}'")
-                raise
+            # For transactions container, partition key is /business_id (integer)
+            from database_cosmos import delete_item
+            delete_item('transactions', actual_doc_id, partition_key=int(business_id))
             
             print(f"DEBUG delete_transaction: Successfully deleted transaction {transaction_id}")
             return jsonify({'message': 'Transaction deleted successfully'}), 200

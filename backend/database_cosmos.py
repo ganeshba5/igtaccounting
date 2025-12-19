@@ -17,7 +17,7 @@ Usage:
 
 import os
 import base64
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union
 from azure.cosmos import CosmosClient, PartitionKey, exceptions
 from azure.cosmos.database import DatabaseProxy
 from azure.cosmos.container import ContainerProxy
@@ -171,36 +171,34 @@ def create_item(container_name: str, item: Dict[str, Any], partition_key: Option
     
     return container.create_item(body=item)
 
-def update_item(container_name: str, item: Dict[str, Any], partition_key: Optional[str] = None) -> Dict[str, Any]:
+def update_item(container_name: str, item: Dict[str, Any], partition_key: Optional[Union[str, int]] = None) -> Dict[str, Any]:
     """Update an existing item."""
     container = get_container(container_name)
     
     if partition_key is None:
         if 'business_id' in item:
-            partition_key = str(item['business_id'])
+            # For containers partitioned by business_id, use integer to match document field type
+            if container_name in ['chart_of_accounts', 'transactions']:
+                partition_key = int(item['business_id'])
+            else:
+                partition_key = str(item['business_id'])
         elif 'id' in item:
             partition_key = str(item['id'])
         else:
             raise ValueError("partition_key must be provided")
     
+    # For containers with integer business_id, ensure partition_key is integer
+    # This matches the document field type and avoids type mismatches
+    if container_name in ['chart_of_accounts', 'transactions']:
+        if isinstance(partition_key, str):
+            partition_key = int(partition_key)
+    
     # Azure Cosmos DB SDK: replace_item requires item ID
     # The partition key is extracted from the item body based on the container's partition key path
     # Read the item first to get the _etag for optimistic concurrency
-    # Read existing item to get _etag for optimistic concurrency
     # BUT: We must NOT overwrite our updated data with the existing item's data
     try:
-        # Try to read with the partition key as provided
-        # For chart_of_accounts, partition key is /business_id which is an integer in documents
-        # Try integer first if partition_key is a string that can be converted
-        partition_key_value = partition_key
-        if container_name == 'chart_of_accounts' and isinstance(partition_key, str):
-            try:
-                # Try with integer partition key first (matches document field type)
-                partition_key_value = int(partition_key)
-            except (ValueError, TypeError):
-                pass  # Use string partition key as fallback
-        
-        existing_item = container.read_item(item=item['id'], partition_key=partition_key_value)
+        existing_item = container.read_item(item=item['id'], partition_key=partition_key)
         # ONLY copy _etag and _ts - these are needed for optimistic concurrency
         # DO NOT copy any other fields - we want to save our updated item, not the old one
         if '_etag' in existing_item:
@@ -210,19 +208,6 @@ def update_item(container_name: str, item: Dict[str, Any], partition_key: Option
         # CRITICAL: The 'item' parameter contains our updated data - don't overwrite it!
         # We're only reading existing_item to get the _etag for the replace operation
     except exceptions.CosmosResourceNotFoundError as e:
-        # If item not found by id, try with alternative partition key type
-        if container_name == 'chart_of_accounts' and isinstance(partition_key, str):
-            try:
-                # Try with integer partition key (document has integer business_id)
-                existing_item = container.read_item(item=item['id'], partition_key=int(partition_key))
-                if '_etag' in existing_item:
-                    item['_etag'] = existing_item['_etag']
-                if '_ts' in existing_item:
-                    item['_ts'] = existing_item['_ts']
-                # Successfully read with integer partition key, continue to replace_item below
-            except exceptions.CosmosResourceNotFoundError:
-                # If still not found, try querying by account_id (fallback below)
-                pass
         
         # If item not found by id, try to find it by querying (in case id format is wrong)
         # This is a fallback for migrated data that might have different id formats
@@ -343,7 +328,7 @@ def update_item(container_name: str, item: Dict[str, Any], partition_key: Option
     
     return result
 
-def delete_item(container_name: str, item_id: str, partition_key: str):
+def delete_item(container_name: str, item_id: str, partition_key: Union[str, int]):
     """Delete an item."""
     container = get_container(container_name)
     print(f"DEBUG delete_item: Deleting from container '{container_name}', item_id='{item_id}', partition_key='{partition_key}' (type: {type(partition_key).__name__})")
