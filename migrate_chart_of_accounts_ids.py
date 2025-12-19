@@ -125,8 +125,8 @@ def migrate_chart_of_accounts_ids():
             for key in ['_rid', '_self', '_etag', '_attachments', '_ts']:
                 new_doc.pop(key, None)
             
-            # Create new document
-            container.create_item(body=new_doc, partition_key=partition_key)
+            # Create new document - use the helper function to match backend pattern
+            created_doc = create_item('chart_of_accounts', new_doc, partition_key=str(partition_key))
             print(f"✓ Created new document with UUID: {new_id} (was {old_id})")
             
             # Delete old document - match exact pattern from backend/app.py
