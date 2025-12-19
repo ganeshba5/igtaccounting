@@ -1081,9 +1081,9 @@ def delete_chart_of_account(business_id, account_id):
                     'message': f'This account has {len(child_accounts)} child account(s). Please delete or reassign child accounts first.'
                 }), 400
             
-            # Delete the account using the actual document ID
+            # Delete the account using the document object directly
             # The document exists (we just queried it), so delete it directly
-            # Note: get_item verification may fail even if document exists, so we skip it
+            # Using the document object ensures we use the exact ID and structure Cosmos DB expects
             print(f"DEBUG delete_chart_of_account: Deleting account with document ID: {account_doc_id}, partition_key: {str(business_id)}", flush=True)
             print(f"DEBUG delete_chart_of_account: Account document from query has keys: {list(account.keys())}", flush=True)
             
@@ -1091,7 +1091,17 @@ def delete_chart_of_account(business_id, account_id):
             partition_key_value = str(account.get('business_id') or business_id)
             print(f"DEBUG delete_chart_of_account: Using partition_key: {partition_key_value} (from account document: {account.get('business_id')})", flush=True)
             
-            delete_item('chart_of_accounts', account_doc_id, partition_key=partition_key_value)
+            # Try deleting using the document object directly first
+            try:
+                from database_cosmos import delete_item_by_document
+                delete_item_by_document('chart_of_accounts', account, partition_key=partition_key_value)
+            except ImportError:
+                # Fallback to regular delete_item if function doesn't exist yet
+                delete_item('chart_of_accounts', account_doc_id, partition_key=partition_key_value)
+            except Exception as doc_error:
+                # If document-based delete fails, try with ID string
+                print(f"WARNING delete_chart_of_account: Document-based delete failed: {doc_error}, trying ID-based delete", flush=True)
+                delete_item('chart_of_accounts', account_doc_id, partition_key=partition_key_value)
             
             return jsonify({'message': 'Account deleted successfully'}), 200
         except Exception as e:

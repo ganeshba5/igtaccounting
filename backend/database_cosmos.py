@@ -317,6 +317,20 @@ def delete_item(container_name: str, item_id: str, partition_key: str):
         print(f"ERROR delete_item: Failed to delete item '{item_id}' from '{container_name}' with partition_key '{partition_key}': {e}")
         raise
 
+def delete_item_by_document(container_name: str, document: Dict[str, Any], partition_key: str):
+    """Delete an item using the document object directly."""
+    container = get_container(container_name)
+    doc_id = document.get('id')
+    print(f"DEBUG delete_item_by_document: Deleting from container '{container_name}', document_id='{doc_id}', partition_key='{partition_key}'")
+    print(f"DEBUG delete_item_by_document: Document keys: {list(document.keys())}")
+    try:
+        # Try using the document object directly - Cosmos DB SDK should extract the ID
+        container.delete_item(item=document, partition_key=partition_key)
+        print(f"DEBUG delete_item_by_document: Successfully deleted document '{doc_id}' from '{container_name}'")
+    except Exception as e:
+        print(f"ERROR delete_item_by_document: Failed to delete document '{doc_id}': {e}")
+        raise
+
 # ========== ACCOUNTING-SPECIFIC QUERIES ==========
 
 def get_businesses() -> List[Dict[str, Any]]:
