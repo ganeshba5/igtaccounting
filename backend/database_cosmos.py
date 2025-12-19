@@ -310,6 +310,12 @@ def update_item(container_name: str, item: Dict[str, Any], partition_key: Option
         saved_lines_debug = [(l.get('chart_of_account_id'), l.get('debit_amount'), l.get('credit_amount')) for l in result.get('lines', [])]
         print(f"DEBUG update_item: Saved transaction {result.get('id')} with lines: {saved_lines_debug}")
     
+    # Debug: Log account_type for chart_of_accounts
+    if container_name == 'chart_of_accounts' and 'account_type' in result:
+        print(f"DEBUG update_item: Saved chart_of_account {result.get('id')} with account_type: {result.get('account_type')}", flush=True)
+    elif container_name == 'chart_of_accounts':
+        print(f"DEBUG update_item: Saved chart_of_account {result.get('id')} - account_type field: {'present' if 'account_type' in result else 'missing'}", flush=True)
+    
     return result
 
 def delete_item(container_name: str, item_id: str, partition_key: str):
