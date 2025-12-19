@@ -189,7 +189,18 @@ def update_item(container_name: str, item: Dict[str, Any], partition_key: Option
     # Read existing item to get _etag for optimistic concurrency
     # BUT: We must NOT overwrite our updated data with the existing item's data
     try:
-        existing_item = container.read_item(item=item['id'], partition_key=partition_key)
+        # Try to read with the partition key as provided
+        # For chart_of_accounts, partition key is /business_id which is an integer in documents
+        # Try integer first if partition_key is a string that can be converted
+        partition_key_value = partition_key
+        if container_name == 'chart_of_accounts' and isinstance(partition_key, str):
+            try:
+                # Try with integer partition key first (matches document field type)
+                partition_key_value = int(partition_key)
+            except (ValueError, TypeError):
+                pass  # Use string partition key as fallback
+        
+        existing_item = container.read_item(item=item['id'], partition_key=partition_key_value)
         # ONLY copy _etag and _ts - these are needed for optimistic concurrency
         # DO NOT copy any other fields - we want to save our updated item, not the old one
         if '_etag' in existing_item:
@@ -199,6 +210,20 @@ def update_item(container_name: str, item: Dict[str, Any], partition_key: Option
         # CRITICAL: The 'item' parameter contains our updated data - don't overwrite it!
         # We're only reading existing_item to get the _etag for the replace operation
     except exceptions.CosmosResourceNotFoundError as e:
+        # If item not found by id, try with alternative partition key type
+        if container_name == 'chart_of_accounts' and isinstance(partition_key, str):
+            try:
+                # Try with integer partition key (document has integer business_id)
+                existing_item = container.read_item(item=item['id'], partition_key=int(partition_key))
+                if '_etag' in existing_item:
+                    item['_etag'] = existing_item['_etag']
+                if '_ts' in existing_item:
+                    item['_ts'] = existing_item['_ts']
+                # Successfully read with integer partition key, continue to replace_item below
+            except exceptions.CosmosResourceNotFoundError:
+                # If still not found, try querying by account_id (fallback below)
+                pass
+        
         # If item not found by id, try to find it by querying (in case id format is wrong)
         # This is a fallback for migrated data that might have different id formats
         if container_name == 'transactions' and 'transaction_id' in item:
