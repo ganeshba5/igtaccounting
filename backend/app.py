@@ -1029,6 +1029,7 @@ def update_chart_of_account(business_id, account_id):
 @require_user_access
 def delete_chart_of_account(business_id, account_id):
     """Delete an account from the chart of accounts."""
+    print(f"DEBUG delete_chart_of_account: Called for business_id={business_id}, account_id={account_id}", flush=True)
     if USE_COSMOS_DB:
         try:
             # Get the account to verify it exists and belongs to the business
