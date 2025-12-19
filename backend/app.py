@@ -859,23 +859,41 @@ def update_chart_of_account(business_id, account_id):
             
             if 'account_type_id' in data:
                 account['account_type_id'] = data['account_type_id'] if data['account_type_id'] else None
-                # Update account type info if provided
+                # Update account type info if provided - use same pattern as create_chart_of_account
                 if data['account_type_id']:
+                    account_type_id_int = int(data['account_type_id']) if data['account_type_id'] else None
+                    # Try querying with id field first
                     account_types = query_items(
                         'account_types',
-                        'SELECT * FROM c WHERE c.type = "account_type" AND c.account_type_id = @account_type_id',
-                        [{"name": "@account_type_id", "value": data['account_type_id']}],
+                        'SELECT * FROM c WHERE c.type = "account_type" AND c.id = @account_type_id',
+                        [{"name": "@account_type_id", "value": account_type_id_int}],
                         partition_key=None
                     )
+                    # If not found, try alternative field names
+                    if not account_types:
+                        account_types = query_items(
+                            'account_types',
+                            'SELECT * FROM c WHERE c.type = "account_type"',
+                            [],
+                            partition_key=None
+                        )
+                        # Filter by id in Python
+                        account_types = [at for at in account_types if at.get('id') == account_type_id_int]
+                    
                     if account_types:
                         at = account_types[0]
                         account['account_type'] = {
-                            'id': at.get('account_type_id'),
+                            'id': at.get('id'),
                             'code': at.get('code'),
                             'name': at.get('name'),
                             'category': at.get('category'),
                             'normal_balance': at.get('normal_balance')
                         }
+                    else:
+                        print(f"WARNING update_chart_of_account: Account type {account_type_id_int} not found", flush=True)
+                else:
+                    # If account_type_id is None/empty, remove account_type
+                    account['account_type'] = None
             
             if 'description' in data:
                 account['description'] = data['description'] or ''
@@ -885,8 +903,8 @@ def update_chart_of_account(business_id, account_id):
             
             account['updated_at'] = datetime.utcnow().isoformat()
             
-            # Update in Cosmos DB
-            updated = update_item('chart_of_accounts', account, partition_key=str(business_id))
+            # Update in Cosmos DB - use integer partition key (same as delete fix)
+            updated = update_item('chart_of_accounts', account, partition_key=int(business_id))
             
             # Return in expected format
             result = {
@@ -2045,27 +2063,29 @@ def delete_transaction(business_id, transaction_id):
                 print(f"DEBUG delete_transaction: Warning - transaction document missing 'id' field, constructing: {actual_doc_id}")
             
             # For transactions container, partition key path is /business_id
-            # So the partition key value should be the business_id (as string)
-            partition_key_value = str(business_id)
-            
-            # Ensure business_id from transaction matches (handle both int and string)
+            # Use integer partition key since document has integer business_id (same fix as chart_of_accounts)
             txn_business_id = transaction.get('business_id')
             if txn_business_id:
-                txn_business_id = int(txn_business_id)
-                if txn_business_id != business_id:
-                    print(f"DEBUG delete_transaction: Business ID mismatch - transaction has {txn_business_id}, requested {business_id}")
-                    return jsonify({'error': 'Transaction does not belong to this business'}), 403
-                # Use the business_id from the transaction document to be safe
-                partition_key_value = str(txn_business_id)
+                partition_key_value = int(txn_business_id)
+            else:
+                partition_key_value = business_id
             
-            print(f"DEBUG delete_transaction: Transaction document actual 'id' field: {actual_doc_id}")
-            print(f"DEBUG delete_transaction: Using document ID: {actual_doc_id}, partition_key: {partition_key_value} (type: {type(partition_key_value).__name__})")
-            print(f"DEBUG delete_transaction: Transaction document fields: id={transaction.get('id')}, transaction_id={transaction.get('transaction_id')}, business_id={transaction.get('business_id')} (type: {type(transaction.get('business_id')).__name__})")
+            # Ensure business_id from transaction matches
+            if txn_business_id and int(txn_business_id) != business_id:
+                print(f"DEBUG delete_transaction: Business ID mismatch - transaction has {txn_business_id}, requested {business_id}", flush=True)
+                return jsonify({'error': 'Transaction does not belong to this business'}), 403
+            
+            print(f"DEBUG delete_transaction: Transaction document actual 'id' field: {actual_doc_id}", flush=True)
+            print(f"DEBUG delete_transaction: Using document ID: {actual_doc_id}, partition_key: {partition_key_value} (type: {type(partition_key_value).__name__})", flush=True)
+            print(f"DEBUG delete_transaction: Transaction document fields: id={transaction.get('id')}, transaction_id={transaction.get('transaction_id')}, business_id={transaction.get('business_id')} (type: {type(transaction.get('business_id')).__name__})", flush=True)
             
             # Delete the transaction (lines are embedded, so they'll be deleted too)
             # For transactions container, partition key is /business_id
             try:
-                delete_item('transactions', actual_doc_id, partition_key=partition_key_value)
+                # Try with integer partition key first (matches document field type)
+                from database_cosmos import get_container
+                container = get_container('transactions')
+                container.delete_item(item=actual_doc_id, partition_key=partition_key_value)
                 print(f"DEBUG delete_transaction: Successfully called delete_item")
             except Exception as delete_error:
                 print(f"ERROR delete_transaction: Exception in delete_item call: {delete_error}")
