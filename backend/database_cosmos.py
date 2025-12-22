@@ -180,21 +180,17 @@ def update_item(container_name: str, item: Dict[str, Any], partition_key: Option
     
     if partition_key is None:
         if 'business_id' in item:
-            # For containers partitioned by business_id, use integer to match document field type
-            if container_name in ['chart_of_accounts', 'transactions']:
-                partition_key = int(item['business_id'])
-            else:
-                partition_key = str(item['business_id'])
+            # Cosmos DB stores partition keys as strings, so use string format
+            partition_key = str(item['business_id'])
         elif 'id' in item:
             partition_key = str(item['id'])
         else:
             raise ValueError("partition_key must be provided")
     
-    # For containers with integer business_id, ensure partition_key is integer
-    # This matches the document field type and avoids type mismatches
-    if container_name in ['chart_of_accounts', 'transactions']:
-        if isinstance(partition_key, str):
-            partition_key = int(partition_key)
+    # Ensure partition_key is a string (Cosmos DB partition keys are stored as strings)
+    # Even if business_id in document is an integer, the partition key path stores it as string
+    if isinstance(partition_key, int):
+        partition_key = str(partition_key)
     
     # Azure Cosmos DB SDK: replace_item requires item ID
     # The partition key is extracted from the item body based on the container's partition key path
@@ -221,10 +217,9 @@ def update_item(container_name: str, item: Dict[str, Any], partition_key: Option
                 parameters=[
                     {"name": "@type", "value": "transaction"},
                     {"name": "@transaction_id", "value": item['transaction_id']},
-                    {"name": "@business_id", "value": int(partition_key)}
+                    {"name": "@business_id", "value": int(partition_key) if isinstance(partition_key, str) and partition_key.isdigit() else partition_key}
                 ],
-                enable_cross_partition_query=False,
-                partition_key=int(partition_key)
+                enable_cross_partition_query=False
             ))
             if query_result:
                 existing_item = query_result[0]
@@ -247,10 +242,9 @@ def update_item(container_name: str, item: Dict[str, Any], partition_key: Option
                 parameters=[
                     {"name": "@type", "value": "chart_of_account"},
                     {"name": "@account_id", "value": item['account_id']},
-                    {"name": "@business_id", "value": int(partition_key)}
+                    {"name": "@business_id", "value": int(partition_key) if isinstance(partition_key, str) and partition_key.isdigit() else partition_key}
                 ],
-                enable_cross_partition_query=False,
-                partition_key=int(partition_key)
+                enable_cross_partition_query=False
             ))
             if query_result:
                 existing_item = query_result[0]
@@ -336,6 +330,9 @@ def update_item(container_name: str, item: Dict[str, Any], partition_key: Option
 def delete_item(container_name: str, item_id: str, partition_key: Union[str, int]):
     """Delete an item."""
     container = get_container(container_name)
+    # Ensure partition_key is a string (Cosmos DB stores partition keys as strings)
+    if isinstance(partition_key, int):
+        partition_key = str(partition_key)
     print(f"DEBUG delete_item: Deleting from container '{container_name}', item_id='{item_id}', partition_key='{partition_key}' (type: {type(partition_key).__name__})")
     try:
         container.delete_item(item=item_id, partition_key=partition_key)

@@ -914,9 +914,8 @@ def update_chart_of_account(business_id, account_id):
             # Debug: Log what we're about to update
             print(f"DEBUG update_chart_of_account: About to update account. ID: {account.get('id')}, account_type_id: {account.get('account_type_id')}, account_type: {account.get('account_type')}", flush=True)
             
-            # Update in Cosmos DB - use integer partition key to match document field type
-            # For chart_of_accounts, partition key is /business_id which is an integer in documents
-            updated = update_item('chart_of_accounts', account, partition_key=int(business_id))
+            # Update in Cosmos DB - use string partition key (Cosmos DB stores partition keys as strings)
+            updated = update_item('chart_of_accounts', account, partition_key=str(business_id))
             
             # Debug: Verify account_type was saved
             if 'account_type' in updated:
@@ -1128,10 +1127,9 @@ def delete_chart_of_account(business_id, account_id):
                     'message': f'This account has {len(child_accounts)} child account(s). Please delete or reassign child accounts first.'
                 }), 400
             
-            # Delete the account - use integer partition key to match document field type
-            # For chart_of_accounts container, partition key is /business_id (integer)
+            # Delete the account - use string partition key (Cosmos DB stores partition keys as strings)
             from database_cosmos import delete_item
-            delete_item('chart_of_accounts', actual_doc_id, partition_key=int(business_id))
+            delete_item('chart_of_accounts', actual_doc_id, partition_key=str(business_id))
             
             print(f"DEBUG delete_chart_of_account: Successfully deleted account {account_id}", flush=True)
             
@@ -2084,9 +2082,9 @@ def delete_transaction(business_id, transaction_id):
             print(f"DEBUG delete_transaction: Transaction document fields: id={transaction.get('id')}, transaction_id={transaction.get('transaction_id')}, business_id={transaction.get('business_id')} (type: {type(transaction.get('business_id')).__name__})", flush=True)
             
             # Delete the transaction (lines are embedded, so they'll be deleted too)
-            # For transactions container, partition key is /business_id (integer)
+            # For transactions container, use string partition key (Cosmos DB stores partition keys as strings)
             from database_cosmos import delete_item
-            delete_item('transactions', actual_doc_id, partition_key=int(business_id))
+            delete_item('transactions', actual_doc_id, partition_key=str(business_id))
             
             print(f"DEBUG delete_transaction: Successfully deleted transaction {transaction_id}")
             return jsonify({'message': 'Transaction deleted successfully'}), 200
