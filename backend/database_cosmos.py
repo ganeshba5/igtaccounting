@@ -115,7 +115,7 @@ def query_items(
     container_name: str,
     query: str,
     parameters: Optional[List[Dict[str, Any]]] = None,
-    partition_key: Optional[str] = None
+    partition_key: Optional[Union[str, int]] = None
 ) -> List[Dict[str, Any]]:
     """
     Execute a SQL query on a container.
@@ -139,11 +139,19 @@ def query_items(
     """
     container = get_container(container_name)
     
-    items = container.query_items(
-        query=query,
-        parameters=parameters or [],
-        enable_cross_partition_query=(partition_key is None)
-    )
+    # Build query options
+    query_options = {
+        'query': query,
+        'parameters': parameters or [],
+        'enable_cross_partition_query': (partition_key is None)
+    }
+    
+    # If partition key is provided and not None, pass it explicitly for better routing
+    # This ensures the SDK routes to the correct partition when enable_cross_partition_query=False
+    if partition_key is not None:
+        query_options['partition_key'] = partition_key
+    
+    items = container.query_items(**query_options)
     
     return list(items)
 
@@ -220,7 +228,8 @@ def update_item(container_name: str, item: Dict[str, Any], partition_key: Option
                     {"name": "@transaction_id", "value": item['transaction_id']},
                     {"name": "@business_id", "value": int(partition_key)}
                 ],
-                enable_cross_partition_query=False
+                enable_cross_partition_query=False,
+                partition_key=int(partition_key)
             ))
             if query_result:
                 existing_item = query_result[0]
@@ -245,7 +254,8 @@ def update_item(container_name: str, item: Dict[str, Any], partition_key: Option
                     {"name": "@account_id", "value": item['account_id']},
                     {"name": "@business_id", "value": int(partition_key)}
                 ],
-                enable_cross_partition_query=False
+                enable_cross_partition_query=False,
+                partition_key=int(partition_key)
             ))
             if query_result:
                 existing_item = query_result[0]

@@ -848,7 +848,7 @@ def update_chart_of_account(business_id, account_id):
                             {"name": "@account_code", "value": data['account_code']},
                             {"name": "@account_id", "value": account_id}
                         ],
-                        partition_key=str(business_id)
+                        partition_key=int(business_id)
                     )
                     if existing:
                         return jsonify({'error': 'Account code already exists for this business'}), 400
@@ -2027,7 +2027,7 @@ def delete_transaction(business_id, transaction_id):
                             {"name": "@transaction_id", "value": transaction_id},
                             {"name": "@business_id", "value": business_id}
                         ],
-                        partition_key=str(business_id)
+                        partition_key=int(business_id)
                     )
                     print(f"DEBUG delete_transaction: Direct query returned {len(direct_results)} results")
                     if direct_results:
