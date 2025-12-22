@@ -139,19 +139,14 @@ def query_items(
     """
     container = get_container(container_name)
     
-    # Build query options
-    query_options = {
-        'query': query,
-        'parameters': parameters or [],
-        'enable_cross_partition_query': (partition_key is None)
-    }
-    
-    # If partition key is provided and not None, pass it explicitly for better routing
-    # This ensures the SDK routes to the correct partition when enable_cross_partition_query=False
-    if partition_key is not None:
-        query_options['partition_key'] = partition_key
-    
-    items = container.query_items(**query_options)
+    # When partition_key is provided, set enable_cross_partition_query=False
+    # The SDK will automatically route to the correct partition based on the query filter
+    # that matches the partition key field (e.g., WHERE c.business_id = @business_id)
+    items = container.query_items(
+        query=query,
+        parameters=parameters or [],
+        enable_cross_partition_query=(partition_key is None)
+    )
     
     return list(items)
 
