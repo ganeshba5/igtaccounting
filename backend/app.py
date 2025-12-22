@@ -848,7 +848,7 @@ def update_chart_of_account(business_id, account_id):
                             {"name": "@account_code", "value": data['account_code']},
                             {"name": "@account_id", "value": account_id}
                         ],
-                        partition_key=int(business_id)
+                        partition_key=str(business_id)
                     )
                     if existing:
                         return jsonify({'error': 'Account code already exists for this business'}), 400
@@ -1119,7 +1119,7 @@ def delete_chart_of_account(business_id, account_id):
                     {"name": "@business_id", "value": business_id},
                     {"name": "@account_id", "value": account_id}
                 ],
-                partition_key=business_id  # Try integer partition key for query too
+                partition_key=str(business_id)  # Use string partition key for queries (matches how data is stored)
             )
             
             if child_accounts:
@@ -2027,7 +2027,7 @@ def delete_transaction(business_id, transaction_id):
                             {"name": "@transaction_id", "value": transaction_id},
                             {"name": "@business_id", "value": business_id}
                         ],
-                        partition_key=int(business_id)
+                        partition_key=str(business_id)
                     )
                     print(f"DEBUG delete_transaction: Direct query returned {len(direct_results)} results")
                     if direct_results:
@@ -2039,7 +2039,7 @@ def delete_transaction(business_id, transaction_id):
                             'transactions',
                             'SELECT c.transaction_id, c.id, c.business_id FROM c WHERE c.type = "transaction" AND c.business_id = @business_id',
                             [{"name": "@business_id", "value": business_id}],
-                            partition_key=business_id  # Use integer partition key
+                            partition_key=str(business_id)  # Use string partition key for queries (matches how data is stored)
                         )
                         print(f"DEBUG delete_transaction: Found {len(all_txns)} total transactions for business {business_id}")
                         if all_txns:
