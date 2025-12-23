@@ -2090,37 +2090,34 @@ def delete_transaction(business_id, transaction_id):
                 print(f"ERROR delete_transaction: Business ID mismatch - transaction has {txn_business_id}, requested {business_id}", flush=True)
                 return jsonify({'error': 'Transaction does not belong to this business'}), 403
             
-            print(f"DEBUG delete_transaction: Attempting to delete with id='{actual_doc_id}', partition_key='{str(txn_business_id)}'", flush=True)
+            print(f"DEBUG delete_transaction: Attempting to delete transaction document", flush=True)
+            print(f"DEBUG delete_transaction: Document id from query: '{actual_doc_id}'", flush=True)
+            print(f"DEBUG delete_transaction: Document _self: {transaction.get('_self')}", flush=True)
+            print(f"DEBUG delete_transaction: Document _rid: {transaction.get('_rid')}", flush=True)
             
-            # First, try to read the document by ID to verify it exists and get the correct ID
-            # This helps diagnose if the ID from the query is correct
+            # The query found the document, but read/delete by ID fails. 
+            # This suggests the document ID in the query result might not match the actual Cosmos DB document ID.
+            # Try deleting using the document object directly - the SDK should handle this correctly
             from database_cosmos import get_container
             container = get_container('transactions')
             try:
-                verify_doc = container.read_item(item=actual_doc_id, partition_key=str(txn_business_id))
-                print(f"DEBUG delete_transaction: Successfully read document by ID. Verified document exists with id='{verify_doc.get('id')}'", flush=True)
-                # Use the ID from the read operation to ensure we have the correct one
-                actual_doc_id = verify_doc.get('id')
-            except Exception as read_error:
-                print(f"ERROR delete_transaction: Failed to read document by ID '{actual_doc_id}': {read_error}", flush=True)
-                print(f"ERROR delete_transaction: This suggests the document ID from query might not match the actual Cosmos DB document ID", flush=True)
-                # Try using the document object directly as fallback
-                if '_self' in transaction:
-                    print(f"DEBUG delete_transaction: Trying delete using document object as fallback", flush=True)
-                    try:
-                        container.delete_item(item=transaction, partition_key=str(txn_business_id))
-                        print(f"DEBUG delete_transaction: Successfully deleted using document object", flush=True)
-                        print(f"DEBUG delete_transaction: Successfully deleted transaction {transaction_id}")
-                        return jsonify({'message': 'Transaction deleted successfully'}), 200
-                    except Exception as doc_delete_error:
-                        print(f"ERROR delete_transaction: Delete using document object also failed: {doc_delete_error}", flush=True)
-                        raise
-                else:
-                    raise
-            
-            # Now try to delete using the verified ID
-            from database_cosmos import delete_item
-            delete_item('transactions', actual_doc_id, partition_key=str(txn_business_id))
+                # Try deleting using the document object directly - Cosmos DB SDK can extract the ID from it
+                print(f"DEBUG delete_transaction: Attempting delete using document object directly", flush=True)
+                container.delete_item(item=transaction, partition_key=str(txn_business_id))
+                print(f"DEBUG delete_transaction: Successfully deleted using document object", flush=True)
+            except Exception as doc_delete_error:
+                print(f"ERROR delete_transaction: Delete using document object failed: {doc_delete_error}", flush=True)
+                # If document object delete fails, try with just the ID string
+                print(f"DEBUG delete_transaction: Trying delete with ID string as fallback", flush=True)
+                try:
+                    from database_cosmos import delete_item
+                    delete_item('transactions', actual_doc_id, partition_key=str(txn_business_id))
+                    print(f"DEBUG delete_transaction: Successfully deleted using ID string", flush=True)
+                except Exception as id_delete_error:
+                    print(f"ERROR delete_transaction: Delete using ID string also failed: {id_delete_error}", flush=True)
+                    # Last resort: try querying by _rid or _self to get the actual document
+                    print(f"ERROR delete_transaction: Both delete methods failed. Document may have been deleted or ID mismatch.", flush=True)
+                    raise doc_delete_error  # Re-raise the original error
             
             print(f"DEBUG delete_transaction: Successfully deleted transaction {transaction_id}")
             return jsonify({'message': 'Transaction deleted successfully'}), 200
