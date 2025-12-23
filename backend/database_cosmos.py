@@ -196,8 +196,10 @@ def update_item(container_name: str, item: Dict[str, Any], partition_key: Option
     # The partition key is extracted from the item body based on the container's partition key path
     # Read the item first to get the _etag for optimistic concurrency
     # BUT: We must NOT overwrite our updated data with the existing item's data
+    print(f"DEBUG update_item: Attempting to update item id='{item.get('id')}', partition_key='{partition_key}', container='{container_name}'", flush=True)
     try:
         existing_item = container.read_item(item=item['id'], partition_key=partition_key)
+        print(f"DEBUG update_item: Successfully read existing item with id='{item.get('id')}'", flush=True)
         # ONLY copy _etag and _ts - these are needed for optimistic concurrency
         # DO NOT copy any other fields - we want to save our updated item, not the old one
         if '_etag' in existing_item:
