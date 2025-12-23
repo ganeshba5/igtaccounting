@@ -784,7 +784,7 @@ def create_chart_of_account(business_id):
             conn.close()
             return jsonify({'error': 'Account code already exists for this business'}), 400
 
-@app.route('/api/businesses/<int:business_id>/chart-of-accounts/<int:account_id>', methods=['PUT'])
+@app.route('/api/businesses/<int:business_id>/chart-of-accounts/<account_id>', methods=['PUT'])
 @require_auth
 @require_user_access
 def update_chart_of_account(business_id, account_id):
@@ -2083,21 +2083,26 @@ def delete_transaction(business_id, transaction_id):
             
             print(f"DEBUG delete_transaction: Attempting to delete with id='{actual_doc_id}', partition_key='{str(txn_business_id)}'", flush=True)
             
-            # Try to verify the document exists by reading it first
-            try:
-                from database_cosmos import get_container
-                container = get_container('transactions')
-                verify_doc = container.read_item(item=actual_doc_id, partition_key=str(txn_business_id))
-                print(f"DEBUG delete_transaction: Successfully verified document exists by reading it. Document id in result: {verify_doc.get('id')}", flush=True)
-            except Exception as verify_error:
-                print(f"ERROR delete_transaction: Failed to verify document by reading - {verify_error}", flush=True)
-                print(f"ERROR delete_transaction: This suggests the document ID '{actual_doc_id}' might not exist or partition key is wrong", flush=True)
-                # Continue with delete attempt anyway - maybe read_item has different behavior
-            
-            # Delete the transaction (lines are embedded, so they'll be deleted too)
-            # Use string partition key (Cosmos DB stores partition keys as strings)
-            from database_cosmos import delete_item
-            delete_item('transactions', actual_doc_id, partition_key=str(txn_business_id))
+            # Try to delete using the document object directly via _self link if available
+            # This is more reliable than constructing the ID
+            if '_self' in transaction:
+                print(f"DEBUG delete_transaction: Document has _self link, trying delete using document object", flush=True)
+                try:
+                    from database_cosmos import get_container
+                    container = get_container('transactions')
+                    # Try deleting using the document object - Cosmos DB SDK can extract ID from it
+                    container.delete_item(item=transaction, partition_key=str(txn_business_id))
+                    print(f"DEBUG delete_transaction: Successfully deleted using document object", flush=True)
+                except Exception as doc_delete_error:
+                    print(f"WARNING delete_transaction: Delete using document object failed: {doc_delete_error}, trying with ID string...", flush=True)
+                    # Fall back to ID-based delete
+                    from database_cosmos import delete_item
+                    delete_item('transactions', actual_doc_id, partition_key=str(txn_business_id))
+            else:
+                # Delete the transaction using ID (lines are embedded, so they'll be deleted too)
+                # Use string partition key (Cosmos DB stores partition keys as strings)
+                from database_cosmos import delete_item
+                delete_item('transactions', actual_doc_id, partition_key=str(txn_business_id))
             
             print(f"DEBUG delete_transaction: Successfully deleted transaction {transaction_id}")
             return jsonify({'message': 'Transaction deleted successfully'}), 200

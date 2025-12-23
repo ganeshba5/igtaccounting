@@ -621,17 +621,40 @@ def get_next_id(container_name: str, id_field: str, partition_key: Optional[str]
         # If query fails, return 1 as default
         return 1
 
-def get_chart_of_account(account_id: int, business_id: int) -> Optional[Dict[str, Any]]:
-    """Get a specific chart of account by account_id."""
-    accounts = query_items(
-        'chart_of_accounts',
-        'SELECT * FROM c WHERE c.type = "chart_of_account" AND c.account_id = @account_id AND c.business_id = @business_id',
-        [
-            {"name": "@account_id", "value": account_id},
-            {"name": "@business_id", "value": business_id}
-        ],
-        partition_key=str(business_id)
-    )
+def get_chart_of_account(account_id, business_id: int) -> Optional[Dict[str, Any]]:
+    """Get a specific chart of account by account_id or UUID document id."""
+    # Check if account_id is a UUID (string that looks like UUID) or integer
+    # UUIDs are typically 36 characters with dashes: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    is_uuid = isinstance(account_id, str) and len(account_id) == 36 and account_id.count('-') == 4
+    
+    if is_uuid:
+        # Query by document id (UUID)
+        accounts = query_items(
+            'chart_of_accounts',
+            'SELECT * FROM c WHERE c.type = "chart_of_account" AND c.id = @id AND c.business_id = @business_id',
+            [
+                {"name": "@id", "value": account_id},
+                {"name": "@business_id", "value": business_id}
+            ],
+            partition_key=str(business_id)
+        )
+    else:
+        # Query by account_id (integer)
+        try:
+            account_id_int = int(account_id) if isinstance(account_id, str) else account_id
+        except (ValueError, TypeError):
+            # If we can't convert to int, treat as not found
+            return None
+            
+        accounts = query_items(
+            'chart_of_accounts',
+            'SELECT * FROM c WHERE c.type = "chart_of_account" AND c.account_id = @account_id AND c.business_id = @business_id',
+            [
+                {"name": "@account_id", "value": account_id_int},
+                {"name": "@business_id", "value": business_id}
+            ],
+            partition_key=str(business_id)
+        )
     return accounts[0] if accounts else None
 
 def get_transaction(transaction_id: int, business_id: int) -> Optional[Dict[str, Any]]:
