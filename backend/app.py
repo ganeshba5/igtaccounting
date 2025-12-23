@@ -864,15 +864,24 @@ def update_chart_of_account(business_id, account_id):
                 if data['account_type_id']:
                     account_type_id_int = int(data['account_type_id']) if data['account_type_id'] else None
                     print(f"DEBUG update_chart_of_account: Looking for account_type with id={account_type_id_int}", flush=True)
-                    # Try querying with id field first
+                    # Query by account_type_id field (the actual field name in Cosmos DB)
                     account_types = query_items(
                         'account_types',
-                        'SELECT * FROM c WHERE c.type = "account_type" AND c.id = @account_type_id',
+                        'SELECT * FROM c WHERE c.type = "account_type" AND c.account_type_id = @account_type_id',
                         [{"name": "@account_type_id", "value": account_type_id_int}],
                         partition_key=None
                     )
-                    print(f"DEBUG update_chart_of_account: Query by id returned {len(account_types) if account_types else 0} results", flush=True)
-                    # If not found, try alternative field names
+                    print(f"DEBUG update_chart_of_account: Query by account_type_id returned {len(account_types) if account_types else 0} results", flush=True)
+                    # If not found, try querying by id field (in case some documents use id instead)
+                    if not account_types:
+                        account_types = query_items(
+                            'account_types',
+                            'SELECT * FROM c WHERE c.type = "account_type" AND c.id = @account_type_id',
+                            [{"name": "@account_type_id", "value": account_type_id_int}],
+                            partition_key=None
+                        )
+                        print(f"DEBUG update_chart_of_account: Query by id returned {len(account_types) if account_types else 0} results", flush=True)
+                    # If still not found, get all and filter
                     if not account_types:
                         account_types = query_items(
                             'account_types',
@@ -881,15 +890,15 @@ def update_chart_of_account(business_id, account_id):
                             partition_key=None
                         )
                         print(f"DEBUG update_chart_of_account: Query all returned {len(account_types) if account_types else 0} total account_types", flush=True)
-                        # Filter by id in Python
-                        account_types = [at for at in account_types if at.get('id') == account_type_id_int]
+                        # Filter by account_type_id or id in Python
+                        account_types = [at for at in account_types if at.get('account_type_id') == account_type_id_int or at.get('id') == account_type_id_int]
                         print(f"DEBUG update_chart_of_account: After filtering, found {len(account_types)} matching account_types", flush=True)
                     
                     if account_types:
                         at = account_types[0]
                         print(f"DEBUG update_chart_of_account: Found account_type: {at}", flush=True)
                         account['account_type'] = {
-                            'id': at.get('id'),
+                            'id': at.get('account_type_id') or at.get('id'),  # Use account_type_id if available, fallback to id
                             'code': at.get('code'),
                             'name': at.get('name'),
                             'category': at.get('category'),
@@ -2083,26 +2092,35 @@ def delete_transaction(business_id, transaction_id):
             
             print(f"DEBUG delete_transaction: Attempting to delete with id='{actual_doc_id}', partition_key='{str(txn_business_id)}'", flush=True)
             
-            # Try to delete using the document object directly via _self link if available
-            # This is more reliable than constructing the ID
-            if '_self' in transaction:
-                print(f"DEBUG delete_transaction: Document has _self link, trying delete using document object", flush=True)
-                try:
-                    from database_cosmos import get_container
-                    container = get_container('transactions')
-                    # Try deleting using the document object - Cosmos DB SDK can extract ID from it
-                    container.delete_item(item=transaction, partition_key=str(txn_business_id))
-                    print(f"DEBUG delete_transaction: Successfully deleted using document object", flush=True)
-                except Exception as doc_delete_error:
-                    print(f"WARNING delete_transaction: Delete using document object failed: {doc_delete_error}, trying with ID string...", flush=True)
-                    # Fall back to ID-based delete
-                    from database_cosmos import delete_item
-                    delete_item('transactions', actual_doc_id, partition_key=str(txn_business_id))
-            else:
-                # Delete the transaction using ID (lines are embedded, so they'll be deleted too)
-                # Use string partition key (Cosmos DB stores partition keys as strings)
-                from database_cosmos import delete_item
-                delete_item('transactions', actual_doc_id, partition_key=str(txn_business_id))
+            # First, try to read the document by ID to verify it exists and get the correct ID
+            # This helps diagnose if the ID from the query is correct
+            from database_cosmos import get_container
+            container = get_container('transactions')
+            try:
+                verify_doc = container.read_item(item=actual_doc_id, partition_key=str(txn_business_id))
+                print(f"DEBUG delete_transaction: Successfully read document by ID. Verified document exists with id='{verify_doc.get('id')}'", flush=True)
+                # Use the ID from the read operation to ensure we have the correct one
+                actual_doc_id = verify_doc.get('id')
+            except Exception as read_error:
+                print(f"ERROR delete_transaction: Failed to read document by ID '{actual_doc_id}': {read_error}", flush=True)
+                print(f"ERROR delete_transaction: This suggests the document ID from query might not match the actual Cosmos DB document ID", flush=True)
+                # Try using the document object directly as fallback
+                if '_self' in transaction:
+                    print(f"DEBUG delete_transaction: Trying delete using document object as fallback", flush=True)
+                    try:
+                        container.delete_item(item=transaction, partition_key=str(txn_business_id))
+                        print(f"DEBUG delete_transaction: Successfully deleted using document object", flush=True)
+                        print(f"DEBUG delete_transaction: Successfully deleted transaction {transaction_id}")
+                        return jsonify({'message': 'Transaction deleted successfully'}), 200
+                    except Exception as doc_delete_error:
+                        print(f"ERROR delete_transaction: Delete using document object also failed: {doc_delete_error}", flush=True)
+                        raise
+                else:
+                    raise
+            
+            # Now try to delete using the verified ID
+            from database_cosmos import delete_item
+            delete_item('transactions', actual_doc_id, partition_key=str(txn_business_id))
             
             print(f"DEBUG delete_transaction: Successfully deleted transaction {transaction_id}")
             return jsonify({'message': 'Transaction deleted successfully'}), 200
