@@ -2083,6 +2083,17 @@ def delete_transaction(business_id, transaction_id):
             
             print(f"DEBUG delete_transaction: Attempting to delete with id='{actual_doc_id}', partition_key='{str(txn_business_id)}'", flush=True)
             
+            # Try to verify the document exists by reading it first
+            try:
+                from database_cosmos import get_container
+                container = get_container('transactions')
+                verify_doc = container.read_item(item=actual_doc_id, partition_key=str(txn_business_id))
+                print(f"DEBUG delete_transaction: Successfully verified document exists by reading it. Document id in result: {verify_doc.get('id')}", flush=True)
+            except Exception as verify_error:
+                print(f"ERROR delete_transaction: Failed to verify document by reading - {verify_error}", flush=True)
+                print(f"ERROR delete_transaction: This suggests the document ID '{actual_doc_id}' might not exist or partition key is wrong", flush=True)
+                # Continue with delete attempt anyway - maybe read_item has different behavior
+            
             # Delete the transaction (lines are embedded, so they'll be deleted too)
             # Use string partition key (Cosmos DB stores partition keys as strings)
             from database_cosmos import delete_item
