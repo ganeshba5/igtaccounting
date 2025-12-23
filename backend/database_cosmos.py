@@ -403,7 +403,8 @@ def get_chart_of_accounts(business_id: int) -> List[Dict[str, Any]]:
         'chart_of_accounts',
         '''
         SELECT 
-            c.account_id as id,
+            c.id,
+            c.account_id,
             c.account_code,
             c.account_name,
             c.description,
@@ -640,7 +641,7 @@ def get_transaction(transaction_id: int, business_id: int) -> Optional[Dict[str,
             {"name": "@transaction_id", "value": transaction_id},
             {"name": "@business_id", "value": business_id}
         ],
-        partition_key=business_id  # Use integer partition key (same fix as chart_of_accounts)
+        partition_key=str(business_id)  # Use string partition key (Cosmos DB stores partition keys as strings)
     )
     if transactions:
         transaction = transactions[0]
