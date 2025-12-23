@@ -2096,47 +2096,45 @@ def delete_transaction(business_id, transaction_id):
             print(f"DEBUG delete_transaction: Document _rid: {transaction.get('_rid')}", flush=True)
             
             # The query found the document, but delete by ID fails. This suggests the actual document ID
-            # in Cosmos DB might be different from what the query returns. 
-            # Try to read the document directly using read_item to get the actual document ID
-            from database_cosmos import get_container
+            # in Cosmos DB might be different from what the query returns.
+            # Extract the actual document ID from the _self link
+            # Format: dbs/{db_id}/colls/{coll_id}/docs/{doc_id}/
+            _self = transaction.get('_self', '')
+            extracted_id = None
+            if _self:
+                # Extract ID from _self link
+                parts = _self.split('/docs/')
+                if len(parts) > 1:
+                    extracted_id = parts[1].rstrip('/')
+                    print(f"DEBUG delete_transaction: Extracted document ID from _self: '{extracted_id}'", flush=True)
+            
+            # Try deleting using the extracted ID first, then fall back to the query ID
+            from database_cosmos import get_container, delete_item
             container = get_container('transactions')
             
-            # Try reading the document using the ID from query to verify it exists and get correct ID
-            # If that fails, the ID from query is wrong - try using the _rid to query for the actual document
-            try:
-                print(f"DEBUG delete_transaction: Attempting to read document directly by ID '{actual_doc_id}' to verify", flush=True)
-                actual_doc = container.read_item(item=actual_doc_id, partition_key=str(txn_business_id))
-                print(f"DEBUG delete_transaction: Successfully read document. Actual document ID: '{actual_doc.get('id')}'", flush=True)
-                # Use the ID from the read operation (should match, but be safe)
-                actual_doc_id = actual_doc.get('id')
-            except Exception as read_error:
-                print(f"WARNING delete_transaction: Cannot read document by ID '{actual_doc_id}': {read_error}", flush=True)
-                print(f"DEBUG delete_transaction: The document ID from query might be wrong. Trying to query by _rid...", flush=True)
-                # Query by _rid to get the actual document
+            # Try with extracted ID first
+            if extracted_id and extracted_id != actual_doc_id:
+                print(f"DEBUG delete_transaction: Trying to delete using extracted ID from _self: '{extracted_id}'", flush=True)
                 try:
-                    from database_cosmos import query_items
-                    rid_results = query_items(
-                        'transactions',
-                        'SELECT * FROM c WHERE c._rid = @_rid',
-                        [{"name": "@_rid", "value": transaction.get('_rid')}],
-                        partition_key=str(txn_business_id)
-                    )
-                    if rid_results:
-                        actual_doc = rid_results[0]
-                        actual_doc_id = actual_doc.get('id')
-                        print(f"DEBUG delete_transaction: Found document by _rid. Actual document ID: '{actual_doc_id}'", flush=True)
-                    else:
-                        print(f"ERROR delete_transaction: Cannot find document by _rid either", flush=True)
-                        raise read_error
-                except Exception as rid_error:
-                    print(f"ERROR delete_transaction: Failed to find document by _rid: {rid_error}", flush=True)
-                    raise read_error
+                    delete_item('transactions', extracted_id, partition_key=str(txn_business_id))
+                    print(f"DEBUG delete_transaction: Successfully deleted using extracted ID", flush=True)
+                    print(f"DEBUG delete_transaction: Successfully deleted transaction {transaction_id}", flush=True)
+                    return jsonify({'message': 'Transaction deleted successfully'}), 200
+                except Exception as extracted_error:
+                    print(f"WARNING delete_transaction: Delete with extracted ID failed: {extracted_error}", flush=True)
             
-            # Now delete using the verified/correct document ID
-            print(f"DEBUG delete_transaction: Deleting with verified document ID: '{actual_doc_id}'", flush=True)
-            from database_cosmos import delete_item
-            delete_item('transactions', actual_doc_id, partition_key=str(txn_business_id))
-            print(f"DEBUG delete_transaction: Successfully deleted transaction {transaction_id}", flush=True)
+            # If extracted ID doesn't work, try using the document object directly
+            # The SDK should be able to extract the correct ID from the document object
+            print(f"DEBUG delete_transaction: Trying to delete using document object directly", flush=True)
+            try:
+                container.delete_item(item=transaction, partition_key=str(txn_business_id))
+                print(f"DEBUG delete_transaction: Successfully deleted using document object", flush=True)
+                print(f"DEBUG delete_transaction: Successfully deleted transaction {transaction_id}", flush=True)
+                return jsonify({'message': 'Transaction deleted successfully'}), 200
+            except Exception as doc_error:
+                print(f"ERROR delete_transaction: Delete using document object failed: {doc_error}", flush=True)
+                print(f"ERROR delete_transaction: Document exists in query but cannot be deleted. This suggests a document ID mismatch.", flush=True)
+                raise
             
             print(f"DEBUG delete_transaction: Successfully deleted transaction {transaction_id}")
             return jsonify({'message': 'Transaction deleted successfully'}), 200
