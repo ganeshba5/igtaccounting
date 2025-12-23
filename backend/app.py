@@ -2097,44 +2097,63 @@ def delete_transaction(business_id, transaction_id):
             
             # The query found the document, but delete by ID fails. This suggests the actual document ID
             # in Cosmos DB might be different from what the query returns.
-            # Extract the actual document ID from the _self link
-            # Format: dbs/{db_id}/colls/{coll_id}/docs/{doc_id}/
-            _self = transaction.get('_self', '')
-            extracted_id = None
-            if _self:
-                # Extract ID from _self link
-                parts = _self.split('/docs/')
-                if len(parts) > 1:
-                    extracted_id = parts[1].rstrip('/')
-                    print(f"DEBUG delete_transaction: Extracted document ID from _self: '{extracted_id}'", flush=True)
+            # Since the query finds the document, the issue might be with the partition key value.
+            # Try both string and integer partition keys, and try using the document's actual business_id value
             
-            # Try deleting using the extracted ID first, then fall back to the query ID
             from database_cosmos import get_container, delete_item
             container = get_container('transactions')
             
-            # Try with extracted ID first
-            if extracted_id and extracted_id != actual_doc_id:
-                print(f"DEBUG delete_transaction: Trying to delete using extracted ID from _self: '{extracted_id}'", flush=True)
+            # Get the actual business_id value from the document (could be int or string)
+            doc_business_id = transaction.get('business_id')
+            
+            # Try multiple partition key formats
+            partition_keys_to_try = []
+            if doc_business_id is not None:
+                partition_keys_to_try.append(str(doc_business_id))
+                if isinstance(doc_business_id, (int, float)):
+                    partition_keys_to_try.append(int(doc_business_id))
+            partition_keys_to_try.append(str(business_id))  # Also try the parameter
+            partition_keys_to_try.append(int(business_id))
+            
+            # Remove duplicates while preserving order
+            seen = set()
+            unique_partition_keys = []
+            for pk in partition_keys_to_try:
+                pk_str = str(pk)
+                if pk_str not in seen:
+                    seen.add(pk_str)
+                    unique_partition_keys.append(pk)
+            
+            print(f"DEBUG delete_transaction: Will try partition keys: {unique_partition_keys}", flush=True)
+            
+            last_error = None
+            for partition_key_value in unique_partition_keys:
                 try:
-                    delete_item('transactions', extracted_id, partition_key=str(txn_business_id))
-                    print(f"DEBUG delete_transaction: Successfully deleted using extracted ID", flush=True)
+                    # Ensure partition key is string (Cosmos DB stores as string)
+                    pk_str = str(partition_key_value)
+                    print(f"DEBUG delete_transaction: Trying to delete with id='{actual_doc_id}', partition_key='{pk_str}'", flush=True)
+                    delete_item('transactions', actual_doc_id, partition_key=pk_str)
+                    print(f"DEBUG delete_transaction: Successfully deleted using partition_key='{pk_str}'", flush=True)
                     print(f"DEBUG delete_transaction: Successfully deleted transaction {transaction_id}", flush=True)
                     return jsonify({'message': 'Transaction deleted successfully'}), 200
-                except Exception as extracted_error:
-                    print(f"WARNING delete_transaction: Delete with extracted ID failed: {extracted_error}", flush=True)
+                except Exception as pk_error:
+                    print(f"WARNING delete_transaction: Delete failed with partition_key='{partition_key_value}': {pk_error}", flush=True)
+                    last_error = pk_error
+                    continue
             
-            # If extracted ID doesn't work, try using the document object directly
-            # The SDK should be able to extract the correct ID from the document object
-            print(f"DEBUG delete_transaction: Trying to delete using document object directly", flush=True)
+            # If all partition key attempts failed, try using document object
+            print(f"DEBUG delete_transaction: All partition key attempts failed, trying document object", flush=True)
             try:
-                container.delete_item(item=transaction, partition_key=str(txn_business_id))
+                # Use the document's actual business_id for partition key
+                final_pk = str(doc_business_id) if doc_business_id is not None else str(business_id)
+                container.delete_item(item=transaction, partition_key=final_pk)
                 print(f"DEBUG delete_transaction: Successfully deleted using document object", flush=True)
                 print(f"DEBUG delete_transaction: Successfully deleted transaction {transaction_id}", flush=True)
                 return jsonify({'message': 'Transaction deleted successfully'}), 200
             except Exception as doc_error:
-                print(f"ERROR delete_transaction: Delete using document object failed: {doc_error}", flush=True)
-                print(f"ERROR delete_transaction: Document exists in query but cannot be deleted. This suggests a document ID mismatch.", flush=True)
-                raise
+                print(f"ERROR delete_transaction: All delete methods failed. Last error: {last_error}", flush=True)
+                print(f"ERROR delete_transaction: Document exists in query but cannot be deleted.", flush=True)
+                raise doc_error
             
             print(f"DEBUG delete_transaction: Successfully deleted transaction {transaction_id}")
             return jsonify({'message': 'Transaction deleted successfully'}), 200
