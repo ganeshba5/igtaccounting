@@ -2058,33 +2058,35 @@ def delete_transaction(business_id, transaction_id):
             
             # Get the actual document ID from the retrieved transaction
             # The 'id' field in the document should match the Cosmos DB document ID
+            # IMPORTANT: Use the 'id' field from the query result - it's the actual Cosmos DB document ID
             actual_doc_id = transaction.get('id')
+            print(f"DEBUG delete_transaction: Transaction document keys: {list(transaction.keys())}", flush=True)
+            print(f"DEBUG delete_transaction: Transaction document 'id' field: {actual_doc_id}", flush=True)
+            print(f"DEBUG delete_transaction: Transaction document 'transaction_id' field: {transaction.get('transaction_id')}", flush=True)
+            print(f"DEBUG delete_transaction: Transaction document 'business_id' field: {transaction.get('business_id')} (type: {type(transaction.get('business_id')).__name__})", flush=True)
+            
             if not actual_doc_id:
-                # Fallback: construct ID from transaction_id if id field is missing
-                actual_doc_id = f"transaction-{transaction_id}"
-                print(f"DEBUG delete_transaction: Warning - transaction document missing 'id' field, constructing: {actual_doc_id}")
+                # This should never happen with SELECT *, but handle it
+                print(f"ERROR delete_transaction: Transaction document missing 'id' field! Cannot delete without document ID", flush=True)
+                return jsonify({'error': 'Transaction document missing ID field'}), 500
             
-            # For transactions container, partition key path is /business_id
-            # Use integer partition key since document has integer business_id (same fix as chart_of_accounts)
+            # Use the business_id from the transaction document for partition key
             txn_business_id = transaction.get('business_id')
-            if txn_business_id:
-                partition_key_value = int(txn_business_id)
-            else:
-                partition_key_value = business_id
+            if not txn_business_id:
+                print(f"ERROR delete_transaction: Transaction document missing 'business_id' field!", flush=True)
+                return jsonify({'error': 'Transaction document missing business_id field'}), 500
             
-            # Ensure business_id from transaction matches
-            if txn_business_id and int(txn_business_id) != business_id:
-                print(f"DEBUG delete_transaction: Business ID mismatch - transaction has {txn_business_id}, requested {business_id}", flush=True)
+            # Verify business_id matches
+            if int(txn_business_id) != business_id:
+                print(f"ERROR delete_transaction: Business ID mismatch - transaction has {txn_business_id}, requested {business_id}", flush=True)
                 return jsonify({'error': 'Transaction does not belong to this business'}), 403
             
-            print(f"DEBUG delete_transaction: Transaction document actual 'id' field: {actual_doc_id}", flush=True)
-            print(f"DEBUG delete_transaction: Using document ID: {actual_doc_id}, partition_key: {partition_key_value} (type: {type(partition_key_value).__name__})", flush=True)
-            print(f"DEBUG delete_transaction: Transaction document fields: id={transaction.get('id')}, transaction_id={transaction.get('transaction_id')}, business_id={transaction.get('business_id')} (type: {type(transaction.get('business_id')).__name__})", flush=True)
+            print(f"DEBUG delete_transaction: Attempting to delete with id='{actual_doc_id}', partition_key='{str(txn_business_id)}'", flush=True)
             
             # Delete the transaction (lines are embedded, so they'll be deleted too)
-            # For transactions container, use string partition key (Cosmos DB stores partition keys as strings)
+            # Use string partition key (Cosmos DB stores partition keys as strings)
             from database_cosmos import delete_item
-            delete_item('transactions', actual_doc_id, partition_key=str(business_id))
+            delete_item('transactions', actual_doc_id, partition_key=str(txn_business_id))
             
             print(f"DEBUG delete_transaction: Successfully deleted transaction {transaction_id}")
             return jsonify({'message': 'Transaction deleted successfully'}), 200
