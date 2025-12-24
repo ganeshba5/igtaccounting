@@ -5136,8 +5136,26 @@ def get_balance_sheet(business_id):
             transactions = cosmos_get_transactions(business_id, end_date=as_of_date)
             print(f"DEBUG Balance Sheet: Found {len(transactions)} transactions up to {as_of_date}")
             
+            # Build mapping from account identifiers (id, account_id) to document UUID
+            # This helps normalize transaction line chart_of_account_id to match account document id
+            account_id_map = {}  # Maps any identifier (UUID, account_id integer, or "account-X-Y" string) to document UUID
+            for acc in balance_sheet_accounts:
+                doc_id = acc.get('id')  # UUID document ID
+                if not doc_id:
+                    continue
+                # Map UUID to itself
+                account_id_map[str(doc_id)] = str(doc_id)
+                # Map account_id (integer) to UUID if it exists
+                if acc.get('account_id'):
+                    account_id_map[str(acc.get('account_id'))] = str(doc_id)
+                # Map old format "account-{business_id}-{account_id}" to UUID
+                if acc.get('account_id'):
+                    account_id_map[f"account-{business_id}-{acc.get('account_id')}"] = str(doc_id)
+            
+            print(f"DEBUG Balance Sheet: Built account ID mapping with {len(account_id_map)} entries")
+            
             # Calculate account balances from transaction lines
-            account_balances = {}
+            account_balances = {}  # Key: UUID document ID (string)
             for txn in transactions:
                 txn_date = txn.get('transaction_date', '')
                 # Only process transactions on or before as_of_date
@@ -5145,30 +5163,33 @@ def get_balance_sheet(business_id):
                     continue
                 
                 for line in txn.get('lines', []):
-                    account_id = line.get('chart_of_account_id')
-                    if not account_id:
+                    line_account_id = line.get('chart_of_account_id')
+                    if not line_account_id:
                         continue
                     
-                    # Handle account_id that might be in format "account-{business_id}-{account_id}"
-                    if isinstance(account_id, str) and account_id.startswith('account-'):
-                        parts = account_id.split('-')
-                        if len(parts) >= 3:
-                            try:
-                                account_id = int(parts[2])
-                            except:
-                                continue
+                    # Normalize transaction line account ID to document UUID
+                    line_account_id_str = str(line_account_id)
+                    doc_id = account_id_map.get(line_account_id_str)
+                    
+                    # If not found in map, check if it's already a UUID (36 chars with dashes)
+                    if not doc_id:
+                        # Check if it's already a UUID
+                        if isinstance(line_account_id, str) and len(line_account_id) == 36 and line_account_id.count('-') == 4:
+                            # It's already a UUID, use it directly if it exists in our accounts
+                            if line_account_id_str in account_id_map.values() or any(acc.get('id') == line_account_id for acc in balance_sheet_accounts):
+                                doc_id = line_account_id_str
+                            else:
+                                continue  # UUID not found in our accounts, skip
                         else:
-                            continue
+                            continue  # Can't map this account ID, skip
                     
-                    account_id = int(account_id)
-                    
-                    if account_id not in account_balances:
-                        account_balances[account_id] = {
+                    if doc_id not in account_balances:
+                        account_balances[doc_id] = {
                             'debit_total': 0.0,
                             'credit_total': 0.0
                         }
-                    account_balances[account_id]['debit_total'] += float(line.get('debit_amount', 0) or 0)
-                    account_balances[account_id]['credit_total'] += float(line.get('credit_amount', 0) or 0)
+                    account_balances[doc_id]['debit_total'] += float(line.get('debit_amount', 0) or 0)
+                    account_balances[doc_id]['credit_total'] += float(line.get('credit_amount', 0) or 0)
             
             print(f"DEBUG Balance Sheet: Calculated balances for {len(account_balances)} accounts")
             
@@ -5180,10 +5201,10 @@ def get_balance_sheet(business_id):
             opening_balance_from_equity = 0.0  # Track opening balance from equity accounts
             
             for acc in balance_sheet_accounts:
-                account_id = acc.get('id')
+                account_id = acc.get('id')  # UUID document ID (string)
                 if not account_id:
                     continue
-                account_id = int(account_id)
+                account_id = str(account_id)  # Ensure it's a string
                 
                 account_type = acc.get('account_type', {})
                 if not isinstance(account_type, dict):
@@ -5303,7 +5324,7 @@ def get_balance_sheet(business_id):
                 
                 # Skip if this bank account's chart of account already exists in assets
                 if bank_chart_account:
-                    chart_account_id = int(bank_chart_account.get('id'))
+                    chart_account_id = str(bank_chart_account.get('id'))  # UUID (string)
                     if chart_account_id in existing_asset_ids:
                         print(f"DEBUG Balance Sheet: Skipping bank account {bank_account_code} (id={bank_id}) - chart of account (id={chart_account_id}) already exists in assets")
                         continue
@@ -5319,7 +5340,7 @@ def get_balance_sheet(business_id):
                 balance = opening_balance
                 
                 if bank_chart_account:
-                    chart_account_id = int(bank_chart_account.get('id'))
+                    chart_account_id = str(bank_chart_account.get('id'))  # UUID (string)
                     if chart_account_id in account_balances:
                         debit_total = account_balances[chart_account_id]['debit_total']
                         credit_total = account_balances[chart_account_id]['credit_total']
@@ -5335,7 +5356,7 @@ def get_balance_sheet(business_id):
                 }
                 # Add account ID if there's an associated chart of account
                 if bank_chart_account:
-                    bank_account_dict['id'] = int(bank_chart_account.get('id'))
+                    bank_account_dict['id'] = str(bank_chart_account.get('id'))  # UUID (string)
                 
                 # Mark this bank account as added
                 added_bank_accounts.add(bank_key)

@@ -550,42 +550,70 @@ def get_profit_loss_accounts(
     transactions = get_transactions(business_id, start_date, end_date)
     print(f"DEBUG get_profit_loss_accounts: Found {len(transactions)} transactions for business_id={business_id}, start_date={start_date}, end_date={end_date}", flush=True)
     
+    # Build mapping from account identifiers (id, account_id) to document UUID
+    # This helps normalize transaction line chart_of_account_id to match account document id
+    account_id_map = {}  # Maps any identifier (UUID, account_id integer, or "account-X-Y" string) to document UUID
+    for acc in revenue_expense_accounts:
+        doc_id = acc.get('id')  # UUID document ID
+        if not doc_id:
+            continue
+        # Map UUID to itself
+        account_id_map[str(doc_id)] = str(doc_id)
+        # Map account_id (integer) to UUID if it exists
+        if acc.get('account_id'):
+            account_id_map[str(acc.get('account_id'))] = str(doc_id)
+        # Map old format "account-{business_id}-{account_id}" to UUID
+        if acc.get('account_id'):
+            account_id_map[f"account-{business_id}-{acc.get('account_id')}"] = str(doc_id)
+    
+    print(f"DEBUG get_profit_loss_accounts: Built account ID mapping with {len(account_id_map)} entries", flush=True)
+    
     # Aggregate balances from transaction lines
-    account_balances = {}
+    account_balances = {}  # Key: UUID document ID (string)
     for txn in transactions:
         for line in txn.get('lines', []):
-            account_id = line.get('chart_of_account_id')
-            if account_id:
-                # Normalize account_id to int for consistent matching
-                try:
-                    account_id = int(account_id)
-                except (ValueError, TypeError):
-                    # If it's not a number, skip this line
-                    print(f"DEBUG get_profit_loss_accounts: Skipping line with invalid chart_of_account_id: {line.get('chart_of_account_id')}", flush=True)
-                    continue
-                if account_id not in account_balances:
-                    account_balances[account_id] = {
-                        'debit_total': 0.0,
-                        'credit_total': 0.0
-                    }
-                debit_amt = float(line.get('debit_amount', 0))
-                credit_amt = float(line.get('credit_amount', 0))
-                account_balances[account_id]['debit_total'] += debit_amt
-                account_balances[account_id]['credit_total'] += credit_amt
+            line_account_id = line.get('chart_of_account_id')
+            if not line_account_id:
+                continue
+            
+            # Normalize transaction line account ID to document UUID
+            line_account_id_str = str(line_account_id)
+            doc_id = account_id_map.get(line_account_id_str)
+            
+            # If not found in map, check if it's already a UUID (36 chars with dashes)
+            if not doc_id:
+                # Check if it's already a UUID
+                if isinstance(line_account_id, str) and len(line_account_id) == 36 and line_account_id.count('-') == 4:
+                    # It's already a UUID, use it directly if it exists in our accounts
+                    if line_account_id_str in account_id_map.values() or any(acc.get('id') == line_account_id for acc in revenue_expense_accounts):
+                        doc_id = line_account_id_str
+                    else:
+                        continue  # UUID not found in our accounts, skip
+                else:
+                    continue  # Can't map this account ID, skip
+            
+            if doc_id not in account_balances:
+                account_balances[doc_id] = {
+                    'debit_total': 0.0,
+                    'credit_total': 0.0
+                }
+            debit_amt = float(line.get('debit_amount', 0))
+            credit_amt = float(line.get('credit_amount', 0))
+            account_balances[doc_id]['debit_total'] += debit_amt
+            account_balances[doc_id]['credit_total'] += credit_amt
     print(f"DEBUG get_profit_loss_accounts: Account balances: {account_balances}", flush=True)
     
     # Calculate balances and attach to accounts
     print(f"DEBUG get_profit_loss_accounts: Processing {len(revenue_expense_accounts)} revenue/expense accounts", flush=True)
     for acc in revenue_expense_accounts:
-        # Normalize account_id to int for consistent matching
-        account_id = acc.get('id') or acc.get('account_id')
-        try:
-            account_id = int(account_id)
-        except (ValueError, TypeError):
-            # Skip accounts without valid ID
-            print(f"DEBUG get_profit_loss_accounts: Skipping account {acc.get('account_code')} with invalid ID: {acc.get('id')}", flush=True)
+        # Use UUID document ID (string)
+        account_id = acc.get('id')
+        if not account_id:
+            print(f"DEBUG get_profit_loss_accounts: Skipping account {acc.get('account_code')} with missing ID", flush=True)
             acc['balance'] = 0.0
             continue
+        account_id = str(account_id)  # Ensure it's a string (UUID)
+        
         if account_id in account_balances:
             category = acc.get('account_type', {}).get('category', '')
             debit_total = account_balances[account_id]['debit_total']
