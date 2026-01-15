@@ -535,15 +535,19 @@ function Reports() {
                           // Normalize both to strings for comparison
                           return String(lineAccountId) === accountIdStr
                         })
-                        const amount = accountLine ? (accountLine.debit_amount || -accountLine.credit_amount) : 0
+                        
+                        // Convert amounts to numbers, handling null/undefined/string values
+                        const debitAmount = accountLine ? (parseFloat(accountLine.debit_amount) || 0) : 0
+                        const creditAmount = accountLine ? (parseFloat(accountLine.credit_amount) || 0) : 0
+                        const amount = debitAmount || -creditAmount
                         
                         return (
                           <tr key={txn.id}>
                             <td>{new Date(txn.transaction_date).toLocaleDateString()}</td>
                             <td>{txn.description || '-'}</td>
                             <td>{txn.reference_number || '-'}</td>
-                            <td style={{ textAlign: 'right' }}>{accountLine && accountLine.debit_amount > 0 ? formatCurrency(accountLine.debit_amount) : '-'}</td>
-                            <td style={{ textAlign: 'right' }}>{accountLine && accountLine.credit_amount > 0 ? formatCurrency(accountLine.credit_amount) : '-'}</td>
+                            <td style={{ textAlign: 'right' }}>{debitAmount > 0 ? formatCurrency(debitAmount) : '-'}</td>
+                            <td style={{ textAlign: 'right' }}>{creditAmount > 0 ? formatCurrency(creditAmount) : '-'}</td>
                             <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{formatCurrency(amount)}</td>
                           </tr>
                         )
