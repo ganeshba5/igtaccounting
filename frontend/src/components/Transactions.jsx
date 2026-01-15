@@ -244,7 +244,7 @@ function Transactions() {
     try {
       const response = await api.bulkUpdateTransactions(businessId, {
         transaction_ids: selectedTransactions,
-        chart_of_account_id: parseInt(bulkEditData.chart_of_account_id),
+        chart_of_account_id: bulkEditData.chart_of_account_id, // Send UUID string directly, don't convert to int
         line_filter: bulkEditData.line_filter
       })
       setShowBulkEditModal(false)

@@ -2212,10 +2212,14 @@ def bulk_update_transactions(business_id):
     
     # Debug: Log received data
     print(f"DEBUG bulk_update_transactions: Received data keys: {list(data.keys()) if data else 'None'}", flush=True)
+    print(f"DEBUG bulk_update_transactions: Full request data: {data}", flush=True)
     print(f"DEBUG bulk_update_transactions: chart_of_account_id = {data.get('chart_of_account_id') if data else 'None'} (type: {type(data.get('chart_of_account_id')).__name__ if data else 'N/A'})", flush=True)
+    print(f"DEBUG bulk_update_transactions: transaction_ids = {data.get('transaction_ids') if data else 'None'}", flush=True)
+    print(f"DEBUG bulk_update_transactions: line_filter = {data.get('line_filter') if data else 'None'}", flush=True)
     
     transaction_ids = data.get('transaction_ids', [])
-    chart_of_account_id = data.get('chart_of_account_id')
+    # Try multiple possible field names for account ID
+    chart_of_account_id = data.get('chart_of_account_id') or data.get('account_id') or data.get('accountId') or data.get('chartOfAccountId')
     line_filter = data.get('line_filter', 'ALL')  # 'ALL', 'DEBIT_ONLY', 'CREDIT_ONLY', 'FIRST_LINE'
     
     if not transaction_ids:
@@ -2223,7 +2227,15 @@ def bulk_update_transactions(business_id):
     
     # Check if chart_of_account_id is provided and not empty
     if chart_of_account_id is None or chart_of_account_id == '' or (isinstance(chart_of_account_id, str) and chart_of_account_id.strip() == ''):
-        return jsonify({'error': 'Chart of account ID is required'}), 400
+        return jsonify({
+            'error': 'Chart of account ID is required',
+            'received_data': {
+                'keys': list(data.keys()) if data else [],
+                'chart_of_account_id': data.get('chart_of_account_id') if data else None,
+                'account_id': data.get('account_id') if data else None,
+                'accountId': data.get('accountId') if data else None
+            }
+        }), 400
     
     if USE_COSMOS_DB:
         try:
