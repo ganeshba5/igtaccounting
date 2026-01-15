@@ -3164,7 +3164,7 @@ def import_transactions_csv(business_id):
                 bank_chart_account = None
                 bank_account_code = bank_account.get('account_code')
                 if bank_account_code:
-                    accounts = get_chart_of_accounts(business_id)
+                    accounts = cosmos_get_chart_of_accounts(business_id)
                     for acc in accounts:
                         if acc.get('account_code') == bank_account_code:
                             bank_chart_account = acc
@@ -3186,7 +3186,7 @@ def import_transactions_csv(business_id):
                         # Generate unique account code
                         account_code = base_account_code
                         suffix = 1
-                        existing_accounts = get_chart_of_accounts(business_id)
+                        existing_accounts = cosmos_get_chart_of_accounts(business_id)
                         
                         while True:
                             if any(acc.get('account_code') == account_code for acc in existing_accounts):
@@ -3232,7 +3232,7 @@ def import_transactions_csv(business_id):
                 def get_or_create_uncategorized_account(category, account_type_name):
                     """Get or create an uncategorized account for the given category."""
                     account_code = f'UNCATEGORIZED_{category}'
-                    accounts = get_chart_of_accounts(business_id)
+                    accounts = cosmos_get_chart_of_accounts(business_id)
                     for acc in accounts:
                         if acc.get('account_code') == account_code:
                             return acc
@@ -3247,7 +3247,7 @@ def import_transactions_csv(business_id):
                     
                     if account_types:
                         account_type = account_types[0]
-                        existing_accounts = get_chart_of_accounts(business_id)
+                        existing_accounts = cosmos_get_chart_of_accounts(business_id)
                         # Use account_id (integer) for next ID calculation, not UUID 'id' field
                         next_account_id = max([acc.get('account_id', 0) for acc in existing_accounts], default=0) + 1
                         
