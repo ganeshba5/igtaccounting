@@ -470,12 +470,22 @@ def get_transactions(
         parameters = [{"name": "@business_id", "value": business_id}]
         
         if start_date:
+            # Normalize start_date to YYYY-MM-DD format (remove time if present)
+            start_date_normalized = start_date.split('T')[0] if 'T' in start_date else start_date.split(' ')[0]
             query += ' AND c.transaction_date >= @start_date'
-            parameters.append({"name": "@start_date", "value": start_date})
+            parameters.append({"name": "@start_date", "value": start_date_normalized})
         
         if end_date:
+            # For end_date, we need to include the full day
+            # Since transaction_date may include time (e.g., "2023-12-31T23:59:59"),
+            # and end_date is just date (e.g., "2023-12-31"),
+            # string comparison "2023-12-31T23:59:59" <= "2023-12-31" fails
+            # Solution: append time to end_date to make it end of day
+            end_date_normalized = end_date.split('T')[0] if 'T' in end_date else end_date.split(' ')[0]
+            # Use end of day for comparison: "2023-12-31T23:59:59.999Z"
+            end_date_max = f"{end_date_normalized}T23:59:59.999Z"
             query += ' AND c.transaction_date <= @end_date'
-            parameters.append({"name": "@end_date", "value": end_date})
+            parameters.append({"name": "@end_date", "value": end_date_max})
         
         # Note: Removed ORDER BY to avoid composite index requirement
         # We'll sort in Python instead
