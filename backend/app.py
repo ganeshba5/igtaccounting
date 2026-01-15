@@ -3535,10 +3535,17 @@ def import_transactions_csv(business_id):
                                 continue
                             
                             # Line 1: Debit expense account
+                            # Ensure chart_of_account_id is always a string (UUID or converted from int)
+                            expense_account_id = expense_account.get('id') or expense_account.get('account_id')
+                            expense_account_id = str(expense_account_id) if expense_account_id is not None else None
+                            
+                            bank_account_id = bank_chart_account.get('id') or bank_chart_account.get('account_id')
+                            bank_account_id = str(bank_account_id) if bank_account_id is not None else None
+                            
                             lines.append({
                                 'id': f'line-{next_transaction_id}-0',
                                 'transaction_line_id': 1,
-                                'chart_of_account_id': expense_account.get('id') or expense_account.get('account_id'),
+                                'chart_of_account_id': expense_account_id,
                                 'debit_amount': amount,
                                 'credit_amount': 0,
                                 'account_code': expense_account.get('account_code'),
@@ -3548,7 +3555,7 @@ def import_transactions_csv(business_id):
                             lines.append({
                                 'id': f'line-{next_transaction_id}-1',
                                 'transaction_line_id': 2,
-                                'chart_of_account_id': bank_chart_account.get('id') or bank_chart_account.get('account_id'),
+                                'chart_of_account_id': bank_account_id,
                                 'debit_amount': 0,
                                 'credit_amount': amount,
                                 'account_code': bank_chart_account.get('account_code'),
@@ -3567,10 +3574,17 @@ def import_transactions_csv(business_id):
                                 continue
                             
                             # Line 1: Debit bank account
+                            # Ensure chart_of_account_id is always a string (UUID or converted from int)
+                            bank_account_id = bank_chart_account.get('id') or bank_chart_account.get('account_id')
+                            bank_account_id = str(bank_account_id) if bank_account_id is not None else None
+                            
+                            revenue_account_id = revenue_account.get('id') or revenue_account.get('account_id')
+                            revenue_account_id = str(revenue_account_id) if revenue_account_id is not None else None
+                            
                             lines.append({
                                 'id': f'line-{next_transaction_id}-0',
                                 'transaction_line_id': 1,
-                                'chart_of_account_id': bank_chart_account.get('id') or bank_chart_account.get('account_id'),
+                                'chart_of_account_id': bank_account_id,
                                 'debit_amount': amount,
                                 'credit_amount': 0,
                                 'account_code': bank_chart_account.get('account_code'),
@@ -3580,7 +3594,7 @@ def import_transactions_csv(business_id):
                             lines.append({
                                 'id': f'line-{next_transaction_id}-1',
                                 'transaction_line_id': 2,
-                                'chart_of_account_id': revenue_account.get('id') or revenue_account.get('account_id'),
+                                'chart_of_account_id': revenue_account_id,
                                 'debit_amount': 0,
                                 'credit_amount': amount,
                                 'account_code': revenue_account.get('account_code'),
