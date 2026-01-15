@@ -2422,9 +2422,10 @@ def bulk_update_transactions(business_id):
                         print(f"DEBUG: Transaction {txn_id} line {idx}: identifier={line_identifier}, matches={matches}")
                         
                         if matches:
-                            # Update the chart_of_account_id - ensure it's an integer
+                            # Update the chart_of_account_id - keep as string (UUID) after migration
                             old_value = updated_line.get('chart_of_account_id')
-                            updated_line['chart_of_account_id'] = int(chart_of_account_id)
+                            # chart_of_account_id is now a UUID string, not an integer
+                            updated_line['chart_of_account_id'] = str(chart_of_account_id)
                             # Also update account_code and account_name for display in transaction list
                             updated_line['account_code'] = chart_account.get('account_code')
                             updated_line['account_name'] = chart_account.get('account_name')
