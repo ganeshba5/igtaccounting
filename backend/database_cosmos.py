@@ -469,6 +469,10 @@ def get_transactions(
         '''
         parameters = [{"name": "@business_id", "value": business_id}]
         
+        # Store normalized dates for logging
+        start_date_normalized = None
+        end_date_max = None
+        
         if start_date:
             # Normalize start_date to YYYY-MM-DD format (remove time if present)
             start_date_normalized = start_date.split('T')[0] if 'T' in start_date else start_date.split(' ')[0]
@@ -490,12 +494,23 @@ def get_transactions(
         # Note: Removed ORDER BY to avoid composite index requirement
         # We'll sort in Python instead
         
+        # Debug: Log query parameters
+        print(f"DEBUG get_transactions: Query parameters - start_date={start_date_normalized if start_date else None}, end_date={end_date_max if end_date else None}, account_id={account_id}", flush=True)
+        
         transactions = query_items(
             'transactions',
             query,
             parameters,
             partition_key=str(business_id)  # Transactions partitioned by business_id
         )
+        
+        # Debug: Log query results
+        print(f"DEBUG get_transactions: Query executed, found {len(transactions)} transactions from query", flush=True)
+        print(f"DEBUG get_transactions: Found {len(transactions)} transactions from query", flush=True)
+        if transactions and len(transactions) > 0:
+            # Log first few transaction dates to verify date filtering
+            sample_dates = [txn.get('transaction_date') for txn in transactions[:5]]
+            print(f"DEBUG get_transactions: Sample transaction dates: {sample_dates}", flush=True)
         
         # Sort in Python: by transaction_date DESC, then transaction_id DESC
         transactions.sort(key=lambda x: (
@@ -521,10 +536,16 @@ def get_transactions(
             # (This would require looking up the account, but for now we'll just match by UUID)
             
             match_count = 0
+            checked_count = 0
             for txn in transactions:
                 txn_date = txn.get('transaction_date')
                 txn_id = txn.get('transaction_id') or txn.get('id')
                 matched = False
+                checked_count += 1
+                
+                # Log transaction date to verify it's in the correct range
+                if checked_count <= 10:  # Log first 10 transactions
+                    print(f"DEBUG get_transactions: Checking transaction {txn_id} with date {txn_date} (start: {start_date_normalized if start_date else 'N/A'}, end: {end_date_max if end_date else 'N/A'})", flush=True)
                 
                 for line in txn.get('lines', []):
                     line_account_id = line.get('chart_of_account_id')
@@ -534,17 +555,16 @@ def get_transactions(
                     line_account_id_str = str(line_account_id)
                     # Match if IDs are equal (handles both UUID and integer formats)
                     if line_account_id_str == account_id_str:
-                        print(f"DEBUG get_transactions: Found matching transaction {txn_id} (date: {txn_date}) - line account_id: {line_account_id_str}", flush=True)
+                        print(f"DEBUG get_transactions: ✓ MATCH - Transaction {txn_id} (date: {txn_date}) - line account_id: {line_account_id_str} == {account_id_str}", flush=True)
                         filtered.append(txn)
                         matched = True
                         match_count += 1
                         break
                 
-                if not matched:
+                if not matched and checked_count <= 10:
                     # Debug: log first few non-matching transactions to see what account IDs they have
-                    if match_count < 3:
-                        line_account_ids = [str(l.get('chart_of_account_id', 'None')) for l in txn.get('lines', [])]
-                        print(f"DEBUG get_transactions: Transaction {txn_id} (date: {txn_date}) does NOT match - line account_ids: {line_account_ids}", flush=True)
+                    line_account_ids = [str(l.get('chart_of_account_id', 'None')) for l in txn.get('lines', [])]
+                    print(f"DEBUG get_transactions: ✗ NO MATCH - Transaction {txn_id} (date: {txn_date}) - line account_ids: {line_account_ids}, searching for: {account_id_str}", flush=True)
             
             print(f"DEBUG get_transactions: Filtered transactions count: {len(filtered)} (matched {match_count} transactions)", flush=True)
             return filtered
