@@ -8,6 +8,8 @@ on:
     types: [opened, synchronize, reopened, closed]
     branches:
       - main
+  workflow_dispatch:
+    # Allow manual trigger via "Run workflow" button in GitHub Actions UI
 
 jobs:
   build_and_deploy_job:
