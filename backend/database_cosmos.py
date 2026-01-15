@@ -527,7 +527,12 @@ def get_transactions(
             filtered = []
             # Look up the account to get all possible ID formats (UUID, account_id integer, etc.)
             # This matches the logic used in get_profit_loss_accounts with account_id_map
-            account = get_chart_of_account(account_id, business_id)
+            try:
+                account = get_chart_of_account(account_id, business_id)
+                print(f"DEBUG get_transactions: Account lookup for account_id={account_id}: {'found' if account else 'not found'}", flush=True)
+            except Exception as e:
+                print(f"DEBUG get_transactions: Error looking up account {account_id}: {e}", flush=True)
+                account = None
             
             # Build a set of all possible account ID formats for matching
             # This is similar to account_id_map in get_profit_loss_accounts
@@ -542,9 +547,12 @@ def get_transactions(
                     account_id_variants.add(str(legacy_account_id))
                     # Also add old format "account-{business_id}-{account_id}"
                     account_id_variants.add(f"account-{business_id}-{legacy_account_id}")
+                
+                print(f"DEBUG get_transactions: Account found - doc_id={doc_id}, legacy_account_id={legacy_account_id}", flush=True)
             else:
                 # Fallback: if account lookup fails, just use the provided account_id
                 account_id_variants.add(str(account_id))
+                print(f"DEBUG get_transactions: Account lookup failed, using provided account_id only: {account_id}", flush=True)
             
             print(f"DEBUG get_transactions: Filtering by account_id={account_id}", flush=True)
             print(f"DEBUG get_transactions: Account ID variants for matching: {account_id_variants}", flush=True)
