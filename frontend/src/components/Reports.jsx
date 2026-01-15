@@ -504,8 +504,15 @@ function Reports() {
                     </thead>
                     <tbody>
                       {drillDownTransactions.map((txn) => {
-                        // Find the line for this account
-                        const accountLine = txn.lines?.find(line => line.chart_of_account_id === drillDownAccount.id)
+                        // Find the line for this account - normalize both IDs to strings for comparison
+                        // After UUID migration, account IDs are UUID strings, but might be in different formats
+                        const accountIdStr = String(drillDownAccount.id)
+                        const accountLine = txn.lines?.find(line => {
+                          const lineAccountId = line.chart_of_account_id
+                          if (!lineAccountId) return false
+                          // Normalize both to strings for comparison
+                          return String(lineAccountId) === accountIdStr
+                        })
                         const amount = accountLine ? (accountLine.debit_amount || -accountLine.credit_amount) : 0
                         
                         return (
