@@ -681,9 +681,9 @@ def create_chart_of_account(business_id):
             else:
                 print(f"WARNING create_chart_of_account: account_type_id is None or empty, skipping account_type embedding", flush=True)
             
-            # Get next account_id
+            # Get next account_id - use account_id (integer) not UUID 'id' field
             existing_accounts = cosmos_get_chart_of_accounts(business_id)
-            next_id = max([acc.get('id') or acc.get('account_id', 0) for acc in existing_accounts], default=0) + 1
+            next_id = max([acc.get('account_id', 0) for acc in existing_accounts], default=0) + 1
             
             # Create account document with UUID for portability across NoSQL databases
             import uuid
@@ -3197,8 +3197,8 @@ def import_transactions_csv(business_id):
                             else:
                                 break
                         
-                        # Get next account_id
-                        next_account_id = max([acc.get('id') or acc.get('account_id', 0) for acc in existing_accounts], default=0) + 1
+                        # Get next account_id - use account_id (integer) not UUID 'id' field
+                        next_account_id = max([acc.get('account_id', 0) for acc in existing_accounts], default=0) + 1
                         
                         # Create chart of account for this bank
                         import uuid
@@ -3248,7 +3248,8 @@ def import_transactions_csv(business_id):
                     if account_types:
                         account_type = account_types[0]
                         existing_accounts = get_chart_of_accounts(business_id)
-                        next_account_id = max([acc.get('id') or acc.get('account_id', 0) for acc in existing_accounts], default=0) + 1
+                        # Use account_id (integer) for next ID calculation, not UUID 'id' field
+                        next_account_id = max([acc.get('account_id', 0) for acc in existing_accounts], default=0) + 1
                         
                         import uuid
                         account_doc = {
