@@ -1888,26 +1888,37 @@ def update_transaction(business_id, transaction_id):
             transformed_lines = []
             for idx, line in enumerate(lines):
                 account_id = line.get('chart_of_account_id')
+                
+                # Debug: Log what we received
+                print(f"DEBUG update_transaction: Line {idx}: account_id={account_id} (type: {type(account_id).__name__}), line keys: {list(line.keys())}", flush=True)
+                
                 # Check if account_id is provided and not empty
-                if account_id and account_id != '' and account_id is not None:
-                    # Get account info - account_id can be UUID string or integer
-                    account = get_chart_of_account(account_id, business_id)
-                    if account:
-                        # After UUID migration, keep chart_of_account_id as string (UUID) or convert to string
-                        chart_of_account_id = str(account_id) if account_id else None
-                        transformed_lines.append({
-                            'id': f'line-{transaction_id}-{idx}',
-                            'transaction_line_id': idx + 1,  # Line number within transaction
-                            'chart_of_account_id': chart_of_account_id,  # Keep as string (UUID) after migration
-                            'debit_amount': float(line.get('debit_amount', 0) or 0),
-                            'credit_amount': float(line.get('credit_amount', 0) or 0),
-                            'account_code': account.get('account_code'),
-                            'account_name': account.get('account_name')
-                        })
-                    else:
-                        return jsonify({'error': f'Account {account_id} not found'}), 400
+                # Handle None, empty string, and falsy values
+                if account_id is None or account_id == '' or (isinstance(account_id, str) and account_id.strip() == ''):
+                    print(f"DEBUG update_transaction: Line {idx} missing chart_of_account_id", flush=True)
+                    return jsonify({
+                        'error': 'All lines must have a chart_of_account_id',
+                        'line_index': idx,
+                        'line_data': {k: v for k, v in line.items() if k != 'account_code' and k != 'account_name'}
+                    }), 400
+                
+                # Get account info - account_id can be UUID string or integer
+                account = get_chart_of_account(account_id, business_id)
+                if account:
+                    # After UUID migration, keep chart_of_account_id as string (UUID) or convert to string
+                    chart_of_account_id = str(account_id) if account_id else None
+                    transformed_lines.append({
+                        'id': f'line-{transaction_id}-{idx}',
+                        'transaction_line_id': idx + 1,  # Line number within transaction
+                        'chart_of_account_id': chart_of_account_id,  # Keep as string (UUID) after migration
+                        'debit_amount': float(line.get('debit_amount', 0) or 0),
+                        'credit_amount': float(line.get('credit_amount', 0) or 0),
+                        'account_code': account.get('account_code'),
+                        'account_name': account.get('account_name')
+                    })
                 else:
-                    return jsonify({'error': 'All lines must have a chart_of_account_id'}), 400
+                    print(f"DEBUG update_transaction: Account {account_id} not found for business {business_id}", flush=True)
+                    return jsonify({'error': f'Account {account_id} not found'}), 400
             
             # Update transaction document
             transaction['transaction_date'] = transaction_date
