@@ -526,15 +526,41 @@ function Reports() {
                     </thead>
                     <tbody>
                       {drillDownTransactions.map((txn) => {
-                        // Find the line for this account - normalize both IDs to strings for comparison
-                        // After UUID migration, account IDs are UUID strings, but might be in different formats
+                        // Find the line for this account - account IDs might be in different formats
+                        // (UUID, integer, or old format strings) so we need to match all variants
                         const accountIdStr = String(drillDownAccount.id)
-                        const accountLine = txn.lines?.find(line => {
+                        
+                        // Build account ID variants to match (same logic as backend)
+                        // The account object from P&L has id (UUID) but might not have account_id
+                        // So we need to match by UUID, and also try to match by looking at all lines
+                        const accountIdVariants = new Set([accountIdStr])
+                        
+                        // If account_id is available, add it as a variant
+                        if (drillDownAccount.account_id !== undefined) {
+                          accountIdVariants.add(String(drillDownAccount.account_id))
+                          // Also add old format "account-{business_id}-{account_id}"
+                          if (businessId) {
+                            accountIdVariants.add(`account-${businessId}-${drillDownAccount.account_id}`)
+                          }
+                        }
+                        
+                        // Find the matching line - check against all variants
+                        let accountLine = txn.lines?.find(line => {
                           const lineAccountId = line.chart_of_account_id
                           if (!lineAccountId) return false
-                          // Normalize both to strings for comparison
-                          return String(lineAccountId) === accountIdStr
+                          // Check if line account ID matches any variant
+                          const lineAccountIdStr = String(lineAccountId)
+                          return accountIdVariants.has(lineAccountIdStr)
                         })
+                        
+                        // Fallback: If no match found, try to match by account_code
+                        // This handles cases where account IDs don't match but we know the account_code
+                        if (!accountLine && drillDownAccount.account_code && txn.lines) {
+                          accountLine = txn.lines.find(line => {
+                            // Try to match by account_code if available in the line
+                            return line.account_code === drillDownAccount.account_code
+                          })
+                        }
                         
                         // Convert amounts to numbers, handling null/undefined/string values
                         const debitAmount = accountLine ? (parseFloat(accountLine.debit_amount) || 0) : 0
