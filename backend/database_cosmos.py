@@ -499,7 +499,17 @@ def get_transactions(
             filtered = []
             # Normalize account_id to string for comparison
             account_id_str = str(account_id)
+            print(f"DEBUG get_transactions: Filtering by account_id={account_id} (normalized: {account_id_str})", flush=True)
+            print(f"DEBUG get_transactions: Total transactions before filtering: {len(transactions)}", flush=True)
+            
             for txn in transactions:
+                # Check transaction date if date filters are applied
+                txn_date = txn.get('transaction_date')
+                if start_date and txn_date and txn_date < start_date:
+                    continue
+                if end_date and txn_date and txn_date > end_date:
+                    continue
+                    
                 for line in txn.get('lines', []):
                     line_account_id = line.get('chart_of_account_id')
                     if not line_account_id:
@@ -508,8 +518,10 @@ def get_transactions(
                     line_account_id_str = str(line_account_id)
                     # Match if IDs are equal (handles both UUID and integer formats)
                     if line_account_id_str == account_id_str:
+                        print(f"DEBUG get_transactions: Found matching transaction {txn.get('transaction_id')} with date {txn_date}", flush=True)
                         filtered.append(txn)
                         break
+            print(f"DEBUG get_transactions: Filtered transactions count: {len(filtered)}", flush=True)
             return filtered
         
         return transactions

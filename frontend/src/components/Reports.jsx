@@ -162,7 +162,29 @@ function Reports() {
         start_date: startDate,
         end_date: endDate
       }
+      console.log('DEBUG loadAccountTransactions:', {
+        accountId: account.id,
+        accountIdType: typeof account.id,
+        accountCode: account.account_code,
+        accountName: account.account_name,
+        startDate,
+        endDate,
+        params
+      })
       const response = await api.getTransactions(businessId, params)
+      console.log('DEBUG loadAccountTransactions response:', {
+        transactionCount: response.data.length,
+        transactions: response.data.map(t => ({
+          id: t.id,
+          date: t.transaction_date,
+          description: t.description,
+          lines: t.lines?.map(l => ({
+            chart_of_account_id: l.chart_of_account_id,
+            debit: l.debit_amount,
+            credit: l.credit_amount
+          }))
+        }))
+      })
       setDrillDownTransactions(response.data)
     } catch (error) {
       console.error('Error loading account transactions:', error)
