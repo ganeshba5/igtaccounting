@@ -525,17 +525,31 @@ def get_transactions(
         # Note: Date filtering is already done in the SQL query above
         if account_id:
             filtered = []
-            # Normalize account_id to string for comparison
-            account_id_str = str(account_id)
-            print(f"DEBUG get_transactions: Filtering by account_id={account_id} (normalized: {account_id_str})", flush=True)
-            print(f"DEBUG get_transactions: Date range: start_date={start_date}, end_date={end_date}", flush=True)
-            print(f"DEBUG get_transactions: Total transactions before account filtering: {len(transactions)}", flush=True)
+            # Look up the account to get all possible ID formats (UUID, account_id integer, etc.)
+            # This matches the logic used in get_profit_loss_accounts with account_id_map
+            account = get_chart_of_account(account_id, business_id)
             
-            # Build a set of all possible account ID formats for this account
-            # This helps match transactions that might have the account ID in different formats
-            account_id_variants = {account_id_str}
-            # If account_id is a UUID, also try to match by account_id integer if available
-            # (This would require looking up the account, but for now we'll just match by UUID)
+            # Build a set of all possible account ID formats for matching
+            # This is similar to account_id_map in get_profit_loss_accounts
+            account_id_variants = set()
+            if account:
+                doc_id = account.get('id')  # UUID document ID
+                legacy_account_id = account.get('account_id')  # Integer legacy ID
+                
+                if doc_id:
+                    account_id_variants.add(str(doc_id))
+                if legacy_account_id:
+                    account_id_variants.add(str(legacy_account_id))
+                    # Also add old format "account-{business_id}-{account_id}"
+                    account_id_variants.add(f"account-{business_id}-{legacy_account_id}")
+            else:
+                # Fallback: if account lookup fails, just use the provided account_id
+                account_id_variants.add(str(account_id))
+            
+            print(f"DEBUG get_transactions: Filtering by account_id={account_id}", flush=True)
+            print(f"DEBUG get_transactions: Account ID variants for matching: {account_id_variants}", flush=True)
+            print(f"DEBUG get_transactions: Date range: start_date={start_date_normalized if start_date else None}, end_date={end_date_max if end_date else None}", flush=True)
+            print(f"DEBUG get_transactions: Total transactions before account filtering: {len(transactions)}", flush=True)
             
             match_count = 0
             checked_count = 0
@@ -555,9 +569,9 @@ def get_transactions(
                         continue
                     # Normalize line account ID to string for comparison
                     line_account_id_str = str(line_account_id)
-                    # Match if IDs are equal (handles both UUID and integer formats)
-                    if line_account_id_str == account_id_str:
-                        print(f"DEBUG get_transactions: ✓ MATCH - Transaction {txn_id} (date: {txn_date}) - line account_id: {line_account_id_str} == {account_id_str}", flush=True)
+                    # Match if line account ID matches any variant (UUID, integer, or old format)
+                    if line_account_id_str in account_id_variants:
+                        print(f"DEBUG get_transactions: ✓ MATCH - Transaction {txn_id} (date: {txn_date}) - line account_id: {line_account_id_str} matches one of {account_id_variants}", flush=True)
                         filtered.append(txn)
                         matched = True
                         match_count += 1
@@ -566,7 +580,7 @@ def get_transactions(
                 if not matched and checked_count <= 10:
                     # Debug: log first few non-matching transactions to see what account IDs they have
                     line_account_ids = [str(l.get('chart_of_account_id', 'None')) for l in txn.get('lines', [])]
-                    print(f"DEBUG get_transactions: ✗ NO MATCH - Transaction {txn_id} (date: {txn_date}) - line account_ids: {line_account_ids}, searching for: {account_id_str}", flush=True)
+                    print(f"DEBUG get_transactions: ✗ NO MATCH - Transaction {txn_id} (date: {txn_date}) - line account_ids: {line_account_ids}, searching for variants: {account_id_variants}", flush=True)
             
             print(f"DEBUG get_transactions: Filtered transactions count: {len(filtered)} (matched {match_count} transactions)", flush=True)
             return filtered
