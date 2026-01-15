@@ -506,11 +506,13 @@ def get_transactions(
         
         # Debug: Log query results
         print(f"DEBUG get_transactions: Query executed, found {len(transactions)} transactions from query", flush=True)
-        print(f"DEBUG get_transactions: Found {len(transactions)} transactions from query", flush=True)
         if transactions and len(transactions) > 0:
-            # Log first few transaction dates to verify date filtering
-            sample_dates = [txn.get('transaction_date') for txn in transactions[:5]]
-            print(f"DEBUG get_transactions: Sample transaction dates: {sample_dates}", flush=True)
+            # Log first few and last few transaction dates to verify date filtering across the range
+            sample_dates_start = [txn.get('transaction_date') for txn in transactions[:3]]
+            sample_dates_end = [txn.get('transaction_date') for txn in transactions[-3:]] if len(transactions) > 3 else []
+            print(f"DEBUG get_transactions: First 3 transaction dates: {sample_dates_start}", flush=True)
+            if sample_dates_end:
+                print(f"DEBUG get_transactions: Last 3 transaction dates: {sample_dates_end}", flush=True)
         
         # Sort in Python: by transaction_date DESC, then transaction_id DESC
         transactions.sort(key=lambda x: (
