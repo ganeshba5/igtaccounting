@@ -130,9 +130,9 @@ function Transactions() {
       const data = {
         ...formData,
         lines: formData.lines
-          .filter(line => line.chart_of_account_id)
+          .filter(line => line.chart_of_account_id && line.chart_of_account_id !== '')
           .map(line => ({
-            chart_of_account_id: parseInt(line.chart_of_account_id),
+            chart_of_account_id: line.chart_of_account_id, // Send UUID string directly, don't convert to int
             debit_amount: parseFloat(line.debit_amount) || 0,
             credit_amount: parseFloat(line.credit_amount) || 0
           }))
