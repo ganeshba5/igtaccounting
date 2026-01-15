@@ -2210,6 +2210,10 @@ def bulk_update_transactions(business_id):
     """Bulk update transaction lines - assign chart of account to existing transaction lines."""
     data = request.get_json()
     
+    # Debug: Log received data
+    print(f"DEBUG bulk_update_transactions: Received data keys: {list(data.keys()) if data else 'None'}", flush=True)
+    print(f"DEBUG bulk_update_transactions: chart_of_account_id = {data.get('chart_of_account_id') if data else 'None'} (type: {type(data.get('chart_of_account_id')).__name__ if data else 'N/A'})", flush=True)
+    
     transaction_ids = data.get('transaction_ids', [])
     chart_of_account_id = data.get('chart_of_account_id')
     line_filter = data.get('line_filter', 'ALL')  # 'ALL', 'DEBIT_ONLY', 'CREDIT_ONLY', 'FIRST_LINE'
@@ -2217,7 +2221,8 @@ def bulk_update_transactions(business_id):
     if not transaction_ids:
         return jsonify({'error': 'No transaction IDs provided'}), 400
     
-    if not chart_of_account_id:
+    # Check if chart_of_account_id is provided and not empty
+    if chart_of_account_id is None or chart_of_account_id == '' or (isinstance(chart_of_account_id, str) and chart_of_account_id.strip() == ''):
         return jsonify({'error': 'Chart of account ID is required'}), 400
     
     if USE_COSMOS_DB:
