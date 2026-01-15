@@ -1540,7 +1540,15 @@ def get_transactions(business_id):
     """Get all transactions for a business."""
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
-    account_id = request.args.get('account_id', type=int)
+    # After UUID migration, account_id can be a UUID string or integer
+    account_id = request.args.get('account_id')
+    # Try to convert to int if it's a numeric string (for backward compatibility)
+    if account_id:
+        try:
+            account_id = int(account_id)
+        except (ValueError, TypeError):
+            # Keep as string if it's a UUID
+            pass
     
     if USE_COSMOS_DB:
         try:

@@ -452,13 +452,15 @@ def get_transactions(
     business_id: int,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    account_id: Optional[int] = None
+    account_id: Optional[Union[str, int]] = None
 ) -> List[Dict[str, Any]]:
     """
     Get transactions for a business with optional filters.
     
     Note: Filtering by account_id requires checking embedded lines,
     which is less efficient. Consider denormalizing account_id to transaction level.
+    
+    After UUID migration, account_id can be a UUID string or integer.
     """
     try:
         query = '''
@@ -492,11 +494,20 @@ def get_transactions(
         ), reverse=True)
         
         # Filter by account_id if specified (requires checking embedded lines)
+        # After UUID migration, account_id can be UUID string or integer
         if account_id:
             filtered = []
+            # Normalize account_id to string for comparison
+            account_id_str = str(account_id)
             for txn in transactions:
                 for line in txn.get('lines', []):
-                    if line.get('chart_of_account_id') == account_id:
+                    line_account_id = line.get('chart_of_account_id')
+                    if not line_account_id:
+                        continue
+                    # Normalize line account ID to string for comparison
+                    line_account_id_str = str(line_account_id)
+                    # Match if IDs are equal (handles both UUID and integer formats)
+                    if line_account_id_str == account_id_str:
                         filtered.append(txn)
                         break
             return filtered
