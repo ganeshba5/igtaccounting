@@ -236,17 +236,30 @@ function Transactions() {
       return
     }
 
-    if (!bulkEditData.chart_of_account_id) {
+    // Validate chart_of_account_id - must be a non-empty string
+    const accountId = bulkEditData.chart_of_account_id
+    if (!accountId || accountId === '' || accountId === null || accountId === undefined) {
       alert('Please select a chart of account')
       return
     }
 
+    console.log('DEBUG handleBulkEdit:', {
+      accountId,
+      accountIdType: typeof accountId,
+      bulkEditData,
+      accountsLength: accounts.length,
+      firstAccount: accounts[0] ? { id: accounts[0].id, idType: typeof accounts[0].id } : 'no accounts'
+    })
+
     try {
-      const response = await api.bulkUpdateTransactions(businessId, {
+      const requestData = {
         transaction_ids: selectedTransactions,
-        chart_of_account_id: bulkEditData.chart_of_account_id, // Send UUID string directly, don't convert to int
+        chart_of_account_id: accountId, // Send UUID string directly, don't convert to int
         line_filter: bulkEditData.line_filter
-      })
+      }
+      console.log('DEBUG handleBulkEdit requestData:', requestData)
+      
+      const response = await api.bulkUpdateTransactions(businessId, requestData)
       setShowBulkEditModal(false)
       setSelectedTransactions([])
       setBulkEditData({ chart_of_account_id: '', line_filter: 'ALL' })
