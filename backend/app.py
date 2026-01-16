@@ -4438,7 +4438,19 @@ def get_combined_profit_loss():
             business_ids = json.loads(business_ids)
         except:
             business_ids = []
-    business_ids = [int(bid) for bid in business_ids if bid]
+    # Convert business_ids to integers, but handle cases where they might be strings
+    # Business IDs should always be integers, not UUIDs
+    parsed_business_ids = []
+    for bid in business_ids:
+        if not bid:
+            continue
+        try:
+            parsed_business_ids.append(int(bid))
+        except (ValueError, TypeError):
+            # If it's not a valid integer, skip it (might be a UUID or invalid format)
+            print(f"DEBUG combined P&L: Skipping invalid business_id: {bid} (not an integer)")
+            continue
+    business_ids = parsed_business_ids
     print(f"DEBUG combined P&L: Parsed business_ids: {business_ids}")
     
     if not business_ids:
@@ -4561,8 +4573,26 @@ def get_combined_profit_loss():
                 print(f"DEBUG combined P&L: Business {business_id}: Found {len(transactions)} transactions in date range {start_date} to {end_date}")
                 all_transactions.extend(transactions)
             
-            # Calculate balances
-            account_balances = {}
+            # Build account ID mapping (same as get_profit_loss_accounts)
+            # Maps any identifier (UUID, account_id integer, or "account-X-Y" string) to UUID document ID
+            account_id_map = {}
+            for acc in all_accounts:
+                doc_id = acc.get('id')  # UUID document ID
+                if not doc_id:
+                    continue
+                # Map UUID to itself
+                account_id_map[str(doc_id)] = str(doc_id)
+                # Map account_id (integer) to UUID if it exists
+                if acc.get('account_id'):
+                    account_id_map[str(acc.get('account_id'))] = str(doc_id)
+                # Map old format "account-{business_id}-{account_id}" to UUID
+                if acc.get('account_id') and acc.get('business_id'):
+                    account_id_map[f"account-{acc.get('business_id')}-{acc.get('account_id')}"] = str(doc_id)
+            
+            print(f"DEBUG combined P&L: Built account ID mapping with {len(account_id_map)} entries")
+            
+            # Calculate balances - use UUID document ID as key
+            account_balances = {}  # Key: (business_id, UUID document ID)
             print(f"DEBUG combined P&L: Processing {len(all_transactions)} transactions")
             for txn in all_transactions:
                 txn_business_id = txn.get('business_id')
@@ -4572,24 +4602,18 @@ def get_combined_profit_loss():
                 txn_business_id = int(txn_business_id)
                 
                 for line in txn.get('lines', []):
-                    account_id = line.get('chart_of_account_id')
-                    if not account_id:
+                    line_account_id = line.get('chart_of_account_id')
+                    if not line_account_id:
                         continue
                     
-                    # Handle account_id that might be in format "account-{business_id}-{account_id}"
-                    if isinstance(account_id, str) and account_id.startswith('account-'):
-                        parts = account_id.split('-')
-                        if len(parts) >= 3:
-                            try:
-                                account_id = int(parts[2])
-                            except:
-                                print(f"DEBUG combined P&L: Could not parse account_id: {account_id}")
-                                continue
-                        else:
-                            continue
+                    # Normalize transaction line account ID to UUID document ID
+                    line_account_id_str = str(line_account_id)
+                    doc_id = account_id_map.get(line_account_id_str)
+                    if not doc_id:
+                        # Account not found in mapping, skip this line
+                        continue
                     
-                    account_id = int(account_id)
-                    key = (txn_business_id, account_id)
+                    key = (txn_business_id, doc_id)
                     
                     if key not in account_balances:
                         account_balances[key] = {
@@ -4630,11 +4654,11 @@ def get_combined_profit_loss():
             accounts_without_balances = 0
             
             for acc in all_accounts:
-                # get_chart_of_accounts returns 'id' (aliased from account_id)
-                account_id = acc.get('id')
-                if not account_id:
+                # get_chart_of_accounts returns 'id' as UUID document ID (after migration)
+                doc_id = acc.get('id')  # UUID document ID
+                if not doc_id:
                     continue
-                account_id = int(account_id)
+                doc_id = str(doc_id)  # Ensure it's a string
                     
                 acc_business_id = acc.get('business_id')
                 if not acc_business_id:
@@ -4652,8 +4676,8 @@ def get_combined_profit_loss():
                 if not category or category not in ('REVENUE', 'EXPENSE'):
                     continue
                 
-                # Ensure both are integers for the key matching
-                key = (acc_business_id, account_id)
+                # Use UUID document ID as key (matches account_balances keys)
+                key = (acc_business_id, doc_id)
                 balance = 0.0
                 if key in account_balances:
                     accounts_with_balances += 1
