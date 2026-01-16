@@ -4679,6 +4679,8 @@ def get_combined_profit_loss():
                 # Use UUID document ID as key (matches account_balances keys)
                 key = (acc_business_id, doc_id)
                 balance = 0.0
+                # Get integer account_id for display and mapping (use doc_id if account_id not available)
+                account_id = acc.get('account_id') or doc_id
                 if key in account_balances:
                     accounts_with_balances += 1
                     debit_total = account_balances[key]['debit_total']
@@ -4692,11 +4694,13 @@ def get_combined_profit_loss():
                 else:
                     accounts_without_balances += 1
                     if accounts_without_balances <= 5:  # Only log first 5 to avoid spam
-                        print(f"DEBUG combined P&L: ✗ No balance found for key ({acc_business_id}, {account_id}) - account: {acc.get('account_code')} {acc.get('account_name')}")
+                        print(f"DEBUG combined P&L: ✗ No balance found for key ({acc_business_id}, {doc_id}) - account: {acc.get('account_code')} {acc.get('account_name')}")
                 
                 # Include accounts with balance or for hierarchy
+                # Use doc_id (UUID) as the key for account_map to ensure uniqueness
                 acc_dict = {
-                    'account_id': account_id,
+                    'account_id': account_id,  # Integer account_id for display
+                    'id': doc_id,  # UUID document ID
                     'account_code': acc.get('account_code'),
                     'account_name': acc.get('account_name'),
                     'parent_account_id': acc.get('parent_account_id'),
@@ -4708,12 +4712,14 @@ def get_combined_profit_loss():
                     'account_type_name': account_type.get('name'),
                     'balance': balance
                 }
-                account_map[account_id] = acc_dict
-                balance_map[account_id] = balance
+                # Use doc_id (UUID) as key for consistency
+                account_map[doc_id] = acc_dict
+                balance_map[doc_id] = balance
             
             print(f"DEBUG combined P&L: Summary - {accounts_with_balances} accounts with balances, {accounts_without_balances} accounts without balances")
             
             # Helper function to get account path
+            # account_id here is the UUID doc_id (key in account_map)
             def get_account_path(account_id, visited=None):
                 """Get the path from root to this account."""
                 if visited is None:
@@ -4727,11 +4733,20 @@ def get_combined_profit_loss():
                 
                 path = []
                 if parent_id:
-                    parent_path = get_account_path(parent_id, visited.copy())
-                    path.extend(parent_path)
+                    # Normalize parent_id to UUID if needed
+                    parent_id_str = str(parent_id)
+                    # Try to find parent in account_map by UUID or integer account_id
+                    parent_doc_id = None
+                    for doc_id, acc in account_map.items():
+                        if str(acc.get('account_id')) == parent_id_str or str(doc_id) == parent_id_str:
+                            parent_doc_id = doc_id
+                            break
+                    if parent_doc_id:
+                        parent_path = get_account_path(parent_doc_id, visited.copy())
+                        path.extend(parent_path)
                 
                 path.append({
-                    'account_id': account_id,
+                    'account_id': account.get('account_id') or account_id,  # Use integer account_id if available
                     'account_name': account['account_name'],
                     'account_code': account['account_code']
                 })
