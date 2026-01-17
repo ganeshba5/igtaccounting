@@ -1068,7 +1068,7 @@ def update_chart_of_account(business_id, account_id):
             conn.close()
             return jsonify({'error': 'Account code already exists for this business'}), 400
 
-@app.route('/api/businesses/<int:business_id>/chart-of-accounts/<int:account_id>', methods=['DELETE'])
+@app.route('/api/businesses/<int:business_id>/chart-of-accounts/<account_id>', methods=['DELETE'])
 @require_auth
 @require_user_access
 def delete_chart_of_account(business_id, account_id):
