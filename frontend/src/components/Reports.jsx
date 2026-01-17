@@ -43,7 +43,7 @@ function Reports() {
       
       case 'currentYearToDate':
         return {
-          start_date: new Date(currentYear, 0, 1).toISOString().split('T')[0],
+          start_date: `${currentYear}-01-01`,
           end_date: now.toISOString().split('T')[0]
         }
       
