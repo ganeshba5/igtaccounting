@@ -39,8 +39,8 @@ function CombinedProfitLoss() {
       case 'lastYear':
         const year = selectedYear ? parseInt(selectedYear) : currentYear - 1
         return {
-          start_date: new Date(year, 0, 1).toISOString().split('T')[0],
-          end_date: new Date(year, 11, 31).toISOString().split('T')[0]
+          start_date: `${year}-01-01`,
+          end_date: `${year}-12-31`
         }
       case 'custom':
         return {
