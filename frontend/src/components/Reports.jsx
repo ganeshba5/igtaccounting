@@ -7,6 +7,7 @@ function Reports() {
   const [activeTab, setActiveTab] = useState('profit-loss')
   const [profitLoss, setProfitLoss] = useState(null)
   const [balanceSheet, setBalanceSheet] = useState(null)
+  const [transactionDetailsByAccount, setTransactionDetailsByAccount] = useState(null)
   const [loading, setLoading] = useState(false)
   const [drillDownAccount, setDrillDownAccount] = useState(null)
   const [drillDownTransactions, setDrillDownTransactions] = useState([])
@@ -136,6 +137,137 @@ function Reports() {
     }
   }
 
+  const buildAccountIdMaps = (accounts, bid) => {
+    const byCanonical = new Map()
+    const lineIdToCanonical = new Map()
+    for (const acc of accounts) {
+      if (acc.id === null || acc.id === undefined) continue
+      const docId = String(acc.id)
+      byCanonical.set(docId, acc)
+      lineIdToCanonical.set(docId, docId)
+      const legacy = acc.account_id
+      if (legacy != null && legacy !== '') {
+        lineIdToCanonical.set(String(legacy), docId)
+        lineIdToCanonical.set(`account-${bid}-${legacy}`, docId)
+      }
+    }
+    return { byCanonical, lineIdToCanonical }
+  }
+
+  const loadTransactionDetailsByAccount = async () => {
+    setLoading(true)
+    try {
+      const dateRange = getDateRange(
+        plFilters.dateFilterType,
+        plFilters.selectedYear,
+        plFilters.start_date,
+        plFilters.end_date
+      )
+      if (plFilters.dateFilterType === 'custom' && (!dateRange.start_date || !dateRange.end_date)) {
+        alert('Please select both start and end dates for custom date range')
+        setLoading(false)
+        return
+      }
+
+      const [txnRes, coaRes] = await Promise.all([
+        api.getTransactions(businessId, {
+          start_date: dateRange.start_date,
+          end_date: dateRange.end_date
+        }),
+        api.getChartOfAccounts(businessId)
+      ])
+
+      const transactions = Array.isArray(txnRes.data) ? txnRes.data : []
+      const accounts = Array.isArray(coaRes.data) ? coaRes.data : []
+      const bid = parseInt(businessId, 10)
+      const { byCanonical, lineIdToCanonical } = buildAccountIdMaps(accounts, bid)
+
+      const groupsMap = new Map()
+
+      const ensureGroup = (canonicalId, lineFallback) => {
+        if (!groupsMap.has(canonicalId)) {
+          const fromCoa = byCanonical.get(canonicalId)
+          groupsMap.set(canonicalId, {
+            canonicalId,
+            account_code: fromCoa?.account_code ?? lineFallback?.account_code ?? '—',
+            account_name: fromCoa?.account_name ?? lineFallback?.account_name ?? 'Unknown account',
+            rows: [],
+            totalDebit: 0,
+            totalCredit: 0
+          })
+        }
+        return groupsMap.get(canonicalId)
+      }
+
+      for (const txn of transactions) {
+        for (const line of txn.lines || []) {
+          const rawCoa = line.chart_of_account_id
+          if (rawCoa === null || rawCoa === undefined || rawCoa === '') continue
+
+          const rawStr = String(rawCoa)
+          const canonicalId = lineIdToCanonical.get(rawStr) || rawStr
+          const lineFallback = {
+            account_code: line.account_code,
+            account_name: line.account_name
+          }
+          const g = ensureGroup(canonicalId, lineFallback)
+          const debit = parseFloat(line.debit_amount) || 0
+          const credit = parseFloat(line.credit_amount) || 0
+          g.rows.push({
+            key: `${txn.id}-${g.rows.length}-${rawStr}`,
+            transactionId: txn.id,
+            date: txn.transaction_date,
+            description: txn.description,
+            reference: txn.reference_number,
+            debit,
+            credit,
+            netAmount: debit > 0 ? debit : -credit
+          })
+          g.totalDebit += debit
+          g.totalCredit += credit
+        }
+      }
+
+      const groups = Array.from(groupsMap.values())
+      for (const g of groups) {
+        g.rows.sort((a, b) => {
+          const da = String(a.date || '').split('T')[0]
+          const db = String(b.date || '').split('T')[0]
+          if (da !== db) return da.localeCompare(db)
+          return String(a.transactionId).localeCompare(String(b.transactionId))
+        })
+      }
+      groups.sort((a, b) => {
+        const ca = a.account_code || ''
+        const cb = b.account_code || ''
+        const codeCmp = ca.localeCompare(cb, undefined, { numeric: true })
+        if (codeCmp !== 0) return codeCmp
+        return (a.account_name || '').localeCompare(b.account_name || '')
+      })
+
+      let grandDebit = 0
+      let grandCredit = 0
+      for (const g of groups) {
+        grandDebit += g.totalDebit
+        grandCredit += g.totalCredit
+      }
+
+      setTransactionDetailsByAccount({
+        start_date: dateRange.start_date,
+        end_date: dateRange.end_date,
+        groups,
+        grandDebit,
+        grandCredit
+      })
+    } catch (error) {
+      console.error('Error loading transaction details by account:', error)
+      alert('Error loading report: ' + (error.response?.data?.error || error.message))
+      setTransactionDetailsByAccount(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // Update as_of_date when year changes
   useEffect(() => {
     if (bsFilters.year) {
@@ -246,8 +378,10 @@ function Reports() {
   useEffect(() => {
     if (activeTab === 'profit-loss') {
       loadProfitLoss()
-    } else {
+    } else if (activeTab === 'balance-sheet') {
       loadBalanceSheet()
+    } else if (activeTab === 'transaction-details-by-account') {
+      loadTransactionDetailsByAccount()
     }
   }, [activeTab])
 
@@ -281,6 +415,12 @@ function Reports() {
             onClick={() => setActiveTab('balance-sheet')}
           >
             Balance Sheet
+          </button>
+          <button
+            className={`tab ${activeTab === 'transaction-details-by-account' ? 'active' : ''}`}
+            onClick={() => setActiveTab('transaction-details-by-account')}
+          >
+            Transaction Details by Account
           </button>
         </div>
 
@@ -589,6 +729,158 @@ function Reports() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {activeTab === 'transaction-details-by-account' && (
+          <div>
+            <div style={{ marginBottom: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '4px' }}>
+              <h3 style={{ marginTop: 0, marginBottom: '15px' }}>Date Filter</h3>
+
+              <div className="form-group" style={{ marginBottom: '15px' }}>
+                <label>Period</label>
+                <select
+                  value={plFilters.dateFilterType}
+                  onChange={(e) => {
+                    const newType = e.target.value
+                    setPlFilters({
+                      ...plFilters,
+                      dateFilterType: newType,
+                      start_date: newType === 'custom' ? plFilters.start_date : '',
+                      end_date: newType === 'custom' ? plFilters.end_date : ''
+                    })
+                  }}
+                  style={{ width: '100%', maxWidth: '400px' }}
+                >
+                  <option value="currentMonthToDate">Current Month To Date</option>
+                  <option value="lastMonth">Last Month</option>
+                  <option value="currentYearToDate">Current Year To Date</option>
+                  <option value="lastYear">Last Year</option>
+                  <option value="custom">Custom Date Range</option>
+                </select>
+              </div>
+
+              {plFilters.dateFilterType === 'lastYear' && (
+                <div className="form-group" style={{ marginBottom: '15px' }}>
+                  <label>Select Year</label>
+                  <select
+                    value={plFilters.selectedYear}
+                    onChange={(e) => setPlFilters({ ...plFilters, selectedYear: e.target.value })}
+                    style={{ width: '100%', maxWidth: '200px' }}
+                  >
+                    {getYearOptions().map(year => (
+                      <option key={year} value={year.toString()}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {plFilters.dateFilterType === 'custom' && (
+                <div className="form-group" style={{ marginBottom: '15px' }}>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      From:
+                      <input
+                        type="date"
+                        value={plFilters.start_date}
+                        onChange={(e) => setPlFilters({ ...plFilters, start_date: e.target.value })}
+                      />
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      To:
+                      <input
+                        type="date"
+                        value={plFilters.end_date}
+                        onChange={(e) => setPlFilters({ ...plFilters, end_date: e.target.value })}
+                      />
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ marginTop: '15px' }}>
+                <button className="btn btn-primary" onClick={loadTransactionDetailsByAccount} disabled={loading}>
+                  {loading ? 'Loading...' : 'Load Report'}
+                </button>
+              </div>
+            </div>
+
+            {transactionDetailsByAccount && (
+              <div>
+                <h2>Transaction Details by Account{business ? ` — ${business.name}` : ''}</h2>
+                <p>
+                  Period:{' '}
+                  {new Date(transactionDetailsByAccount.start_date).toLocaleDateString()} —{' '}
+                  {new Date(transactionDetailsByAccount.end_date).toLocaleDateString()}
+                </p>
+
+                {transactionDetailsByAccount.groups.length === 0 ? (
+                  <p style={{ color: '#999' }}>No line items in this period.</p>
+                ) : (
+                  <>
+                    {transactionDetailsByAccount.groups.map((g) => (
+                      <div key={g.canonicalId} style={{ marginBottom: '28px' }}>
+                        <h3 style={{ marginBottom: '10px', fontSize: '1.05rem' }}>
+                          {g.account_code} — {g.account_name}
+                        </h3>
+                        <table style={{ width: '100%', fontSize: '14px' }}>
+                          <thead>
+                            <tr>
+                              <th>Date</th>
+                              <th>Description</th>
+                              <th>Reference</th>
+                              <th style={{ textAlign: 'right' }}>Debit</th>
+                              <th style={{ textAlign: 'right' }}>Credit</th>
+                              <th style={{ textAlign: 'right' }}>Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {g.rows.map((row) => (
+                              <tr key={row.key}>
+                                <td>{row.date ? new Date(row.date).toLocaleDateString() : '—'}</td>
+                                <td>{row.description || '—'}</td>
+                                <td>{row.reference || '—'}</td>
+                                <td style={{ textAlign: 'right' }}>
+                                  {row.debit > 0 ? formatCurrency(row.debit) : '—'}
+                                </td>
+                                <td style={{ textAlign: 'right' }}>
+                                  {row.credit > 0 ? formatCurrency(row.credit) : '—'}
+                                </td>
+                                <td style={{ textAlign: 'right', fontWeight: '500' }}>
+                                  {formatCurrency(row.netAmount)}
+                                </td>
+                              </tr>
+                            ))}
+                            <tr style={{ fontWeight: 'bold', borderTop: '1px solid #ccc' }}>
+                              <td colSpan="3" style={{ textAlign: 'right' }}>Account total</td>
+                              <td style={{ textAlign: 'right' }}>{formatCurrency(g.totalDebit)}</td>
+                              <td style={{ textAlign: 'right' }}>{formatCurrency(g.totalCredit)}</td>
+                              <td style={{ textAlign: 'right' }}>
+                                {formatCurrency(g.totalDebit - g.totalCredit)}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+
+                    <table style={{ marginTop: '8px', width: '100%', maxWidth: '480px' }}>
+                      <tbody>
+                        <tr style={{ fontWeight: 'bold', fontSize: '16px', borderTop: '2px solid #333' }}>
+                          <td>Report totals (all debits / credits)</td>
+                          <td style={{ textAlign: 'right' }}>
+                            {formatCurrency(transactionDetailsByAccount.grandDebit)} /{' '}
+                            {formatCurrency(transactionDetailsByAccount.grandCredit)}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
 

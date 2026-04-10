@@ -530,6 +530,7 @@ def get_chart_of_accounts(business_id):
                 account_type = acc.get('account_type', {})
                 result.append({
                     'id': acc.get('id') or acc.get('account_id'),
+                    'account_id': acc.get('account_id'),
                     'business_id': business_id,
                     'account_code': acc.get('account_code'),
                     'account_name': acc.get('account_name'),
